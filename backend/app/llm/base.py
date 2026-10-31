@@ -12,6 +12,7 @@ class LLMErrorCode(StrEnum):
     SERVER = "server"
     INVALID_RESPONSE = "invalid_response"
     NO_RESPONSE = "no_response"
+    POLICY = "policy"
 
 
 @dataclass(frozen=True)

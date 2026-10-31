@@ -21,9 +21,15 @@ architecture review with GPT-6 (see ChatGPT mentorship conversation).
 1. Copy `.env.example` to `.env` and fill in values (never commit `.env`).
 2. Create the virtualenv and install pinned deps:
    `python -m venv backend/.venv && backend/.venv/Scripts/python -m pip install -r backend/requirements.txt`
-3. Apply database migrations from `backend/`:
-   `MONITORED_PROJECTS=deployiq-demo backend/.venv/Scripts/python -m alembic upgrade head`
-4. Start the API from `backend/` (migrations must run first; the app never auto-creates schema):
+3. Apply database migrations from `backend/` (migrations replace `create_all`;
+   the app never auto-creates schema at startup):
+   - Fresh database: `backend/.venv/Scripts/python -m alembic upgrade head`
+   - Pre-existing dev database (has incidents but predates Alembic): stamp the
+     baseline first, then upgrade:
+     `backend/.venv/Scripts/python -m alembic stamp 0001_baseline_incidents`
+     `backend/.venv/Scripts/python -m alembic upgrade head`
+   (Verify the existing schema matches the baseline before stamping.)
+4. Start the API from `backend/` (migrations must run first):
    `$env:MONITORED_PROJECTS="deployiq-demo"; .venv/Scripts/python -m uvicorn app.main:app`
 5. Frontend and RAG/AI setup instructions will be added as those milestones land.
 

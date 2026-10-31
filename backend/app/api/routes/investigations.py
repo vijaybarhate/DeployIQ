@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.investigation import Investigation
 from app.db.session import get_session
+from app.llm.base import LLMError
 from app.schemas.investigation_api import InvestigationRead
 from app.services.investigation import DuplicateActiveInvestigation, run_investigation
 
@@ -32,7 +33,9 @@ def _to_read(inv: Investigation) -> InvestigationRead:
         total_tokens=inv.total_tokens,
         duration_ms=inv.duration_ms,
         error_code=inv.error_code,
+        error_message=inv.error_message,
         created_at=inv.created_at,
+        started_at=inv.started_at,
         completed_at=inv.completed_at,
     )
 
@@ -50,6 +53,16 @@ async def trigger_investigation(
             status_code=409,
             detail=f"an investigation is already active: {exc.investigation_id}",
         ) from None
+    except LLMError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"investigation provider failed: {exc.code.value}"
+        ) from None
+    if record.status == "failed":
+        raise HTTPException(status_code=502, detail=f"investigation failed: {record.error_code}")
+    if record.status == "validation_failed":
+        raise HTTPException(
+            status_code=502, detail=f"investigation failed validation: {record.error_code}"
+        )
     return _to_read(record)
 
 

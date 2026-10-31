@@ -64,19 +64,30 @@ async def _coro_report(state):
 
 def test_invented_evidence_id_rejected():
     out = asyncio.run(_coro_report(_state(rca_json=_diagnosed(evidence=("E-999",)))))
-    assert out["rca"].diagnosis_status.value == "insufficient_evidence"
-    assert "E-999" in out["rca"].limitations
+    assert out["rca"] is None
+    assert out["report_error"].startswith("invalid_citation")
+    assert "E-999" in out["report_error"]
 
 
 def test_invented_runbook_id_rejected():
     out = asyncio.run(_coro_report(_state(rca_json=_diagnosed(runbooks=("RB-999",)))))
-    assert out["rca"].diagnosis_status.value == "insufficient_evidence"
-    assert "RB-999" in out["rca"].limitations
+    assert out["rca"] is None
+    assert out["report_error"].startswith("invalid_citation")
+    assert "RB-999" in out["report_error"]
 
 
 def test_invalid_model_json_rejected():
     out = asyncio.run(_coro_report(_state(rca_json={"diagnosis_status": "diagnosed"})))
-    assert out["rca"].diagnosis_status.value == "insufficient_evidence"
+    assert out["rca"] is None
+    assert out["report_error"].startswith("invalid_schema")
+
+
+def test_provider_error_stays_failed_not_completed():
+    out = asyncio.run(
+        _coro_report(_state(error_code="timeout", error_message="upstream timed out"))
+    )
+    assert out["rca"] is None
+    assert out["report_error"] == "timeout"
 
 
 def test_secrets_redacted_from_llm_prompt():

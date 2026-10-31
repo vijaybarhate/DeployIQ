@@ -18,11 +18,14 @@ class InvestigationState(TypedDict, total=False):
     source: str
     title: str
     error_signature: str
+    raw_logs: str
     evidence: list[EvidenceRef]
     usable_evidence: bool
     runbooks: list[dict]
+    runbook_sections: dict[str, dict]
     rca_json: dict
     rca: RCAReport
+    report_error: str
     error_code: str
     error_message: str
     actual_model: str

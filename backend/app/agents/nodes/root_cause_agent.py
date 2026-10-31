@@ -56,14 +56,17 @@ def build_user_prompt(state: InvestigationState, max_chars: int) -> str:
         )
     lines.append("")
     runbooks = state.get("runbooks", [])
+    sections = state.get("runbook_sections", {})
     if runbooks:
-        lines.append("Retrieved runbooks:")
+        lines.append("Retrieved runbooks (cite by ID only; validator attaches titles/URLs):")
         for rb in runbooks:
-            lines.append(f"- {rb.get('runbook_id', '?')}: {rb.get('title', '')}")
-            for section in (rb.get("matched_sections") or [])[:4]:
-                lines.append(f"  matched section: {section}")
+            rid = rb.get("runbook_id", "?")
+            lines.append(f"- {rid}: {rb.get('title', '')}")
             for url in (rb.get("source_urls") or [])[:4]:
                 lines.append(f"  source: {url}")
+            content = (sections.get(rid, {}) or {}).get("sections", {})
+            for name, body in list(content.items())[:3]:
+                lines.append(f"  [{name}] {body[:1200]}")
     else:
         lines.append("Retrieved runbooks: none matched. Diagnose from direct evidence only.")
     prompt = "\n".join(lines)

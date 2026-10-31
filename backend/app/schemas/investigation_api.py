@@ -19,5 +19,7 @@ class InvestigationRead(BaseModel):
     total_tokens: int = 0
     duration_ms: int = 0
     error_code: str = ""
+    error_message: str = ""
     created_at: datetime
+    started_at: datetime | None = None
     completed_at: datetime | None = None

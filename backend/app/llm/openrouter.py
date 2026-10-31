@@ -36,6 +36,7 @@ class OpenRouterProvider:
         self._api_key = api_key
         self._model = model
         self._fallbacks = [m for m in (fallback_models or []) if m]
+        self._enforce_free_only([self._model, *self._fallbacks])
         self._base_url = base_url.rstrip("/")
         self._timeout = httpx.Timeout(timeout_seconds)
         self._max_output_tokens = max_output_tokens
@@ -46,6 +47,28 @@ class OpenRouterProvider:
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
+
+    @staticmethod
+    def _is_explicitly_free(model_id: str) -> bool:
+        """Free-only routing guard.
+
+        Allowed (per OpenRouter docs):
+        - IDs ending ":free" (free catalog variants, zero pricing).
+        - Exactly "openrouter/free" (Free Models Router: documented to fall
+          back only to other free models, pricing zero).
+        Rejected: everything else, including "openrouter/auto" (spend-based
+        routing across paid models) and bare paid model IDs. A comment is not
+        enforcement; this check runs before every request.
+        """
+        return model_id.endswith(":free") or model_id == "openrouter/free"
+
+    def _enforce_free_only(self, models: list[str]) -> None:
+        bad = [m for m in models if not self._is_explicitly_free(m)]
+        if bad:
+            raise LLMError(
+                LLMErrorCode.POLICY,
+                f"non-free model in routing list (free-only policy): {bad}",
+            )
 
     def _payload(self, system_prompt: str, user_prompt: str, use_json_mode: bool) -> dict:
         models = [self._model, *self._fallbacks]
@@ -71,8 +94,21 @@ class OpenRouterProvider:
                 # or explicitly rejected the parameter: the single permitted
                 # compatibility retry uses plain JSON prompting instead.
                 system_prompt = system_prompt + "\nRespond with a single valid JSON object only."
-                return await self._attempt(
+                retry = await self._attempt(
                     system_prompt, user_prompt, use_json_mode=False, start=start
+                )
+                # Aggregate usage across both attempts so recorded token
+                # consumption stays accurate: one logical investigation.
+                return LLMCompletion(
+                    parsed=retry.parsed,
+                    actual_model=retry.actual_model or exc.model,
+                    usage=TokenUsage(
+                        prompt_tokens=exc.usage.prompt_tokens + retry.usage.prompt_tokens,
+                        completion_tokens=exc.usage.completion_tokens
+                        + retry.usage.completion_tokens,
+                        total_tokens=exc.usage.total_tokens + retry.usage.total_tokens,
+                    ),
+                    latency_ms=retry.latency_ms,
                 )
             raise
 

@@ -36,15 +36,13 @@ def test_shell_env_beats_env_file(tmp_path, monkeypatch):
     assert settings.log_level == "WARNING"
 
 
-def test_cwd_fallback_when_root_env_missing(tmp_path, monkeypatch):
-    from app import config as config_module
+def test_cwd_fallback_when_root_env_missing(tmp_path):
+    from app.config import resolve_env_file
 
-    monkeypatch.chdir(tmp_path)
-    local = tmp_path / ".env"
-    local.write_text("LOG_LEVEL=ERROR\n")
-    monkeypatch.setattr(config_module, "ENV_FILE", tmp_path / "does-not-exist.env", raising=False)
-    # Recompute like the module does: root missing -> CWD .env
-    fallback = tmp_path / ".env" if not (tmp_path / "does-not-exist.env").exists() else None
-    assert fallback is not None and fallback.exists()
-    settings = Settings(_env_file=str(local))
-    assert settings.log_level == "ERROR"
+    root_without_env = tmp_path / "projroot"
+    root_without_env.mkdir()
+    assert resolve_env_file(root_without_env, tmp_path) == tmp_path / ".env"
+    root_with_env = tmp_path / "realroot"
+    root_with_env.mkdir()
+    (root_with_env / ".env").write_text("LOG_LEVEL=ERROR\n")
+    assert resolve_env_file(root_with_env, tmp_path) == root_with_env / ".env"

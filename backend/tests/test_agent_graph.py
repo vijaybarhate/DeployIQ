@@ -41,7 +41,22 @@ class StubRetriever:
         ]
 
     def get(self, runbook_id):
-        raise KeyError(runbook_id)
+        from app.rag.schemas import Runbook
+
+        assert runbook_id == "RB-007"
+        return Runbook(
+            runbook_id="RB-007",
+            title="HTTP 500",
+            technology="app",
+            symptoms="500 errors",
+            causes="bug",
+            diagnostics="read logs",
+            remediation="fix code",
+            verification="rerun",
+            risk="low",
+            sources=["https://docs.docker.com/x"],
+            raw_text="HTTP 500",
+        )
 
 
 def _initial():
@@ -113,4 +128,5 @@ def test_graph_rejects_fabricated_ids():
     provider = StubProvider(parsed)
     graph = build_graph(provider, StubRetriever(), max_input_chars=5000)
     final = asyncio.run(graph.ainvoke(_initial()))
-    assert final["rca"].diagnosis_status.value == "insufficient_evidence"
+    assert final["rca"] is None
+    assert final["report_error"].startswith("invalid_citation")

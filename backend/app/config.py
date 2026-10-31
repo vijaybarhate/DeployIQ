@@ -5,10 +5,17 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# backend/app/config.py -> parents[2] == repository root, where .env lives.
+# backend/app/config.py is backend/app/config.py -> parents[2] == repository root.
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT_ENV_FILE = REPO_ROOT / ".env"
-ENV_FILE = ROOT_ENV_FILE if ROOT_ENV_FILE.exists() else Path.cwd() / ".env"
+
+
+def resolve_env_file(root: Path, cwd: Path) -> Path:
+    """Root .env wins; otherwise fall back to the current working directory."""
+    candidate = root / ".env"
+    return candidate if candidate.exists() else cwd / ".env"
+
+
+ENV_FILE = resolve_env_file(REPO_ROOT, Path.cwd())
 
 
 class Settings(BaseSettings):

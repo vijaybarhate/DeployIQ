@@ -14,19 +14,26 @@ class Severity(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+    CRITICAL = "critical"
     UNKNOWN = "unknown"
+
+
+class RiskLevel(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 class Finding(BaseModel):
     description: str = Field(min_length=1)
-    evidence_ids: list[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(min_length=1)
     runbook_ids: list[str] = Field(default_factory=list)
 
 
 class Recommendation(BaseModel):
     title: str = Field(min_length=1)
     steps: list[str] = Field(default_factory=list)
-    risk_level: str = "low"
+    risk_level: RiskLevel = RiskLevel.LOW
     requires_approval: bool = True
 
 
@@ -51,7 +58,9 @@ class RCAReport(BaseModel):
                 raise ValueError("confidence_estimate must be null when evidence is insufficient")
             if self.findings:
                 raise ValueError("findings must be empty when evidence is insufficient")
-        else:
-            if not self.root_cause:
-                raise ValueError("root_cause is required when diagnosed")
+            if self.recommendations:
+                raise ValueError("recommendations must be empty when evidence is insufficient")
+            return self
+        if not self.root_cause:
+            raise ValueError("root_cause is required when diagnosed")
         return self

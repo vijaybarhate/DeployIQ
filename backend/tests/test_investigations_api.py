@@ -3,6 +3,8 @@
 import os
 import uuid
 
+import pytest
+
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_investigations.db")
 os.environ.setdefault("MONITORED_PROJECTS", "demo")
 
@@ -13,7 +15,6 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
-from app.agents.graph import build_graph  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.models import incident as _incident  # noqa: F401,E402 (register model)
 from app.db.models import investigation as _investigation  # noqa: F401,E402 (register model)
@@ -22,8 +23,6 @@ from app.db.models.investigation import Investigation  # noqa: E402
 from app.db.session import get_session  # noqa: E402
 from app.llm.base import LLMCompletion, LLMProvider, TokenUsage  # noqa: E402
 from app.main import app  # noqa: E402
-from app.rag.schemas import RetrievalResult  # noqa: E402
-from app.services import investigation as investigation_service  # noqa: E402
 
 RCA = {
     "diagnosis_status": "diagnosed",
@@ -53,8 +52,10 @@ class StubProvider(LLMProvider):
 
 class StubRetriever:
     def retrieve(self, query, top_k=3):
+        from app.rag.schemas import RetrievalResult as RR
+
         return [
-            RetrievalResult(
+            RR(
                 runbook_id="RB-007",
                 title="HTTP 500",
                 relevance_score=9.0,
@@ -64,7 +65,22 @@ class StubRetriever:
         ]
 
     def get(self, runbook_id):
-        raise KeyError(runbook_id)
+        from app.rag.schemas import Runbook
+
+        assert runbook_id == "RB-007"
+        return Runbook(
+            runbook_id="RB-007",
+            title="HTTP 500",
+            technology="app",
+            symptoms="500 errors",
+            causes="bug",
+            diagnostics="read logs",
+            remediation="fix code",
+            verification="rerun",
+            risk="low",
+            sources=["https://docs.docker.com/x"],
+            raw_text="HTTP 500",
+        )
 
 
 engine = create_engine(
@@ -85,18 +101,16 @@ def _override_session():
 app.dependency_overrides[get_session] = _override_session
 client = TestClient(app, raise_server_exceptions=False)
 
-investigation_service.get_retriever = lambda: StubRetriever()
-
 import app.services.investigation as _svc  # noqa: E402
 
-_orig_build_graph = build_graph
+
+def _stub_pipeline(key):
+    from app.agents.graph import build_graph as _build
+
+    return StubProvider(), _build(StubProvider(), StubRetriever(), 5000)
 
 
-def _stubbed_build_graph(provider, retriever, max_input_chars):
-    return _orig_build_graph(StubProvider(), StubRetriever(), max_input_chars)
-
-
-_svc.build_graph = _stubbed_build_graph
+_svc._get_pipeline = _stub_pipeline  # type: ignore[method-assign]
 
 
 def _seed_incident() -> uuid.UUID:
@@ -179,3 +193,100 @@ def test_completed_allows_new_investigation():
     assert r.status_code == 201, r.text
     r = client.get(f"/api/v1/incidents/{incident_id}/investigations")
     assert len(r.json()) == 2
+
+
+def test_integrity_error_maps_to_duplicate():
+    """The DB unique index is the race-proof guard: concurrent inserts collide."""
+
+    from sqlalchemy.exc import IntegrityError
+
+    incident_id = _seed_incident()
+    session = TestingSession()
+    first = Investigation(incident_id=incident_id, status="pending")
+    session.add(first)
+    session.commit()
+    clash = Investigation(incident_id=incident_id, status="pending")
+    session.add(clash)
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+    session.close()
+
+
+def test_concurrent_duplicate_returns_409():
+    """Two near-simultaneous triggers: exactly one wins; the other gets 409."""
+    import asyncio
+    from unittest.mock import patch
+
+    from sqlalchemy.exc import IntegrityError
+
+    from app.services import investigation as svc
+
+    incident_id = _seed_incident()
+    calls = {"n": 0}
+    session = TestingSession()
+
+    orig_commit = session.commit
+
+    def flaky_commit():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Simulate the lost race: the INSERT hits the unique index.
+            raise IntegrityError("INSERT", {}, Exception("UNIQUE constraint failed"))
+        return orig_commit()
+
+    with patch.object(session, "commit", side_effect=flaky_commit):
+        with pytest.raises(Exception) as exc:
+            asyncio.run(svc.run_investigation(session, incident_id))
+    assert isinstance(exc.value, svc.DuplicateActiveInvestigation) or "already active" in str(
+        exc.value
+    )
+    session.close()
+
+
+class _FailingProvider:
+    async def complete_json(self, system_prompt, user_prompt):
+        from app.llm.base import LLMError, LLMErrorCode
+
+        raise LLMError(LLMErrorCode.TIMEOUT, "upstream timed out")
+
+
+def _failing_pipeline(key):
+    from app.agents.graph import build_graph as _build
+
+    return _FailingProvider(), _build(_FailingProvider(), StubRetriever(), 5000)
+
+
+def test_provider_failure_yields_failed_record():
+    """A failing provider produces a failed record (never a fake completed RCA)."""
+    import asyncio
+
+    from app.services import investigation as svc
+
+    incident_id = _seed_incident()
+    session = TestingSession()
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(svc, "_get_pipeline", _failing_pipeline)
+        record = asyncio.run(svc.run_investigation(session, incident_id))
+    assert record.status == "failed"
+    assert record.error_code == "timeout"
+    assert record.error_message
+    assert record.started_at is not None
+    assert record.actual_model == ""
+    session.close()
+
+    r = client.post(f"/api/v1/incidents/{incident_id}/investigations")
+    assert r.status_code == 201, r.text  # terminal failure does not block a retry
+    session.close()
+
+
+def test_failed_investigation_returns_502():
+    """Provider failure surfaced through the API is a 502, not a fake 201."""
+    from app.services import investigation as svc
+
+    incident_id = _seed_incident()
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(svc, "_get_pipeline", _failing_pipeline)
+        r = client.post(f"/api/v1/incidents/{incident_id}/investigations")
+    assert r.status_code == 502, r.text
+    assert "timeout" in r.json()["detail"]

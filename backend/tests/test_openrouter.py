@@ -172,6 +172,20 @@ def test_error_carries_model_and_usage():
     assert exc.value.usage.total_tokens == 3
 
 
+def test_non_free_model_rejected_before_request():
+    """Free-only policy: paid-looking IDs never reach the network."""
+    from app.llm.base import LLMError, LLMErrorCode
+    from app.llm.openrouter import OpenRouterProvider
+
+    for bad in ["anthropic/claude-sonnet-4", "openrouter/auto", "vendor/model"]:
+        with pytest.raises(LLMError) as exc:
+            OpenRouterProvider(api_key="k", model=bad)
+        assert exc.value.code == LLMErrorCode.POLICY
+    # Documented free routes pass validation (no request made here).
+    OpenRouterProvider(api_key="k", model="openrouter/free")
+    OpenRouterProvider(api_key="k", model="x/y:free", fallback_models=["z/w:free"])
+
+
 def test_fallback_models_sent_in_order():
     seen = []
 
