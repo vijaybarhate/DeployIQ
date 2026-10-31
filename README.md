@@ -19,7 +19,13 @@ architecture review with GPT-6 (see ChatGPT mentorship conversation).
 ## Quickstart (placeholder)
 
 1. Copy `.env.example` to `.env` and fill in values (never commit `.env`).
-2. Backend and frontend setup instructions will be added once Milestone 1 is approved.
+2. Create the virtualenv and install pinned deps:
+   `python -m venv backend/.venv && backend/.venv/Scripts/python -m pip install -r backend/requirements.txt`
+3. Apply database migrations from `backend/`:
+   `MONITORED_PROJECTS=deployiq-demo backend/.venv/Scripts/python -m alembic upgrade head`
+4. Start the API from `backend/` (migrations must run first; the app never auto-creates schema):
+   `$env:MONITORED_PROJECTS="deployiq-demo"; .venv/Scripts/python -m uvicorn app.main:app`
+5. Frontend and RAG/AI setup instructions will be added as those milestones land.
 
 ## Security
 

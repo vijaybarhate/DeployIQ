@@ -1,0 +1,23 @@
+"""Investigation API schemas."""
+
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class InvestigationRead(BaseModel):
+    id: uuid.UUID
+    incident_id: uuid.UUID
+    status: str
+    requested_model: str
+    actual_model: str
+    prompt_version: str
+    result: dict | None = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    duration_ms: int = 0
+    error_code: str = ""
+    created_at: datetime
+    completed_at: datetime | None = None

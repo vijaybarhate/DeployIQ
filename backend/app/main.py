@@ -4,16 +4,34 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import update
 
-from app.api.routes import health, incidents
+from app.api.routes import health, incidents, investigations
 from app.config import get_settings
 from app.core.logging import setup_logging
-from app.db.session import init_db
+from app.db.models.investigation import Investigation
+from app.db.session import SessionLocal
+
+
+def _recover_interrupted() -> None:
+    """Mark investigations left active by a restart as failed (never lock forever)."""
+    session = SessionLocal()
+    try:
+        session.execute(
+            update(Investigation)
+            .where(Investigation.status.in_(["pending", "running"]))
+            .values(status="failed", error_code="interrupted")
+        )
+        session.commit()
+    finally:
+        session.close()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    init_db()
+    # Schema comes from Alembic migrations (run `alembic upgrade head` first).
+    # Only crash recovery runs here; never create_all (see M3.2 notes).
+    _recover_interrupted()
     yield
 
 
@@ -23,6 +41,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(incidents.router, prefix="/api/v1")
+    app.include_router(investigations.router, prefix="/api/v1")
     return app
 
 
