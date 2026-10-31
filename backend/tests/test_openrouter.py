@@ -169,7 +169,8 @@ def test_error_carries_model_and_usage():
     with pytest.raises(LLMError) as exc:
         _await(_provider(httpx.MockTransport(handler)).complete_json("s", "u"))
     assert exc.value.model == "m:free"
-    assert exc.value.usage.total_tokens == 3
+    assert exc.value.usage.total_tokens == 6  # 3 + 3 across both attempts
+    assert "first attempt used 3 tokens" in str(exc.value)
 
 
 def test_non_free_model_rejected_before_request():

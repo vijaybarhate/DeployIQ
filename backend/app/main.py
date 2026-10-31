@@ -2,9 +2,9 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC
 
 from fastapi import FastAPI
-from sqlalchemy import update
 
 from app.api.routes import health, incidents, investigations
 from app.config import get_settings
@@ -14,14 +14,23 @@ from app.db.session import SessionLocal
 
 
 def _recover_interrupted() -> None:
-    """Mark investigations left active by a restart as failed (never lock forever)."""
+    """Mark investigations left active by a restart as failed with full audit fields."""
+    from datetime import datetime
+
+    from app.core.security import redact_secrets
+
     session = SessionLocal()
     try:
-        session.execute(
-            update(Investigation)
-            .where(Investigation.status.in_(["pending", "running"]))
-            .values(status="failed", error_code="interrupted")
+        rows = (
+            session.query(Investigation)
+            .filter(Investigation.status.in_(["pending", "running"]))
+            .all()
         )
+        for row in rows:
+            row.status = "failed"
+            row.error_code = "interrupted"
+            row.error_message = redact_secrets("Investigation interrupted by application restart.")
+            row.completed_at = datetime.now(UTC)
         session.commit()
     finally:
         session.close()

@@ -94,9 +94,25 @@ class OpenRouterProvider:
                 # or explicitly rejected the parameter: the single permitted
                 # compatibility retry uses plain JSON prompting instead.
                 system_prompt = system_prompt + "\nRespond with a single valid JSON object only."
-                retry = await self._attempt(
-                    system_prompt, user_prompt, use_json_mode=False, start=start
-                )
+                try:
+                    retry = await self._attempt(
+                        system_prompt, user_prompt, use_json_mode=False, start=start
+                    )
+                except LLMError as retry_exc:
+                    # The retry failed too: preserve the first attempt's usage.
+                    first = exc.usage
+                    second = retry_exc.usage or TokenUsage()
+                    merged = TokenUsage(
+                        prompt_tokens=first.prompt_tokens + second.prompt_tokens,
+                        completion_tokens=first.completion_tokens + second.completion_tokens,
+                        total_tokens=first.total_tokens + second.total_tokens,
+                    )
+                    raise LLMError(
+                        retry_exc.code,
+                        f"{retry_exc} (first attempt used {first.total_tokens} tokens)",
+                        model=retry_exc.model or exc.model,
+                        usage=merged,
+                    ) from retry_exc
                 # Aggregate usage across both attempts so recorded token
                 # consumption stays accurate: one logical investigation.
                 return LLMCompletion(

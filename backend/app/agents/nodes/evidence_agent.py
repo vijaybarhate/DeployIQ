@@ -28,26 +28,35 @@ def evidence_agent(state: InvestigationState) -> dict:
         )
     logs = redact_secrets((state.get("raw_logs", "") or "")[-MAX_LOG_CHARS:])
     fresh = extract_evidence(logs)
-    if fresh["category"] in MIN_USABLE_CATEGORIES and fresh["category"] not in {
-        r["kind"] for r in refs
-    }:
-        refs.append(
-            {
-                "id": f"E-{len(refs) + 1:03d}",
-                "kind": fresh["category"],
-                "summary": " ".join(
-                    x
-                    for x in [
-                        fresh["exception_type"],
-                        fresh["exception_message"],
-                        fresh["last_frame"],
-                        f"exit {fresh['exit_code']}" if fresh["exit_code"] else "",
-                    ]
-                    if x
-                )[:300],
-                "detail": f"health={fresh['health_status']} oom={fresh['oom']}",
-            }
-        )
+    if fresh["category"] in MIN_USABLE_CATEGORIES:
+        detail_parts = [
+            fresh["exception_type"],
+            fresh["exception_message"],
+            fresh["last_frame"],
+            f"exit {fresh['exit_code']}" if fresh["exit_code"] else "",
+        ]
+        detail = " ".join(p for p in detail_parts if p)[:300]
+        merged = False
+        for ref in refs:
+            if ref["kind"] == fresh["category"]:
+                # Merge, don't discard: the stored ref may lack the message
+                # or frame the fresh extraction just found.
+                for key, value in (
+                    ("summary", detail),
+                    ("detail", f"health={fresh['health_status']} oom={fresh['oom']}"),
+                ):
+                    if value and value not in ref[key]:
+                        ref[key] = f"{ref[key]} {value}".strip()[:500]
+                merged = True
+        if not merged:
+            refs.append(
+                {
+                    "id": f"E-{len(refs) + 1:03d}",
+                    "kind": fresh["category"],
+                    "summary": detail,
+                    "detail": f"health={fresh['health_status']} oom={fresh['oom']}",
+                }
+            )
     usable = fresh["category"] in MIN_USABLE_CATEGORIES or any(
         str(item.get("summary", "")) or str(item.get("detail", "")) for item in raw_items
     )

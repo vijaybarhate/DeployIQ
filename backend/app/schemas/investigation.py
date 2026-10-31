@@ -63,4 +63,9 @@ class RCAReport(BaseModel):
             return self
         if not self.root_cause:
             raise ValueError("root_cause is required when diagnosed")
+        if not self.findings:
+            raise ValueError("a diagnosed report must contain at least one finding")
+        for rec in self.recommendations:
+            if not rec.requires_approval:
+                raise ValueError("every recommendation must require approval")
         return self

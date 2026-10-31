@@ -123,3 +123,45 @@ def test_prompt_injection_treated_as_data():
     # Malicious text is passed through as evidence content (to diagnose),
     # never executed — the prompt frames everything as untrusted data.
     assert "Ignore previous instructions" in prompt
+
+
+def test_unapproved_recommendation_rejected_end_to_end():
+    bad = _diagnosed()
+    bad["recommendations"] = [
+        {"title": "t", "steps": ["s"], "risk_level": "low", "requires_approval": False}
+    ]
+    out = asyncio.run(_coro_report(_state(rca_json=bad)))
+    assert out["rca"] is None
+    assert out["report_error"].startswith("invalid_schema")
+
+
+def test_evidence_merge_keeps_message_and_frame():
+    """GPT M3.2-1: fresh traceback details merge into the existing ref."""
+    from app.agents.nodes import evidence_agent
+
+    state = {
+        "incident_id": "i1",
+        "project_id": "demo",
+        "source": "docker",
+        "title": "boom",
+        "error_signature": "sig",
+        "raw_logs": (
+            "Traceback (most recent call last):\n"
+            '  File "/code/app.py", line 33, in do_GET\n'
+            "ZeroDivisionError: division by zero\n"
+        ),
+        "evidence": [
+            {"id": "E-001", "kind": "exception", "summary": "ZeroDivisionError", "detail": ""}
+        ],
+    }
+    out = evidence_agent.evidence_agent(state)
+    assert out["usable_evidence"] is True
+    assert len(out["evidence"]) == 1  # merged, not duplicated
+    merged = out["evidence"][0]
+    assert "division by zero" in merged["summary"]
+    assert "app.py" in merged["summary"] and "do_GET" in merged["summary"]
+    prompt = build_user_prompt(
+        {**state, "evidence": out["evidence"], "runbooks": []}, max_chars=5000
+    )
+    assert "division by zero" in prompt
+    assert "do_GET" in prompt

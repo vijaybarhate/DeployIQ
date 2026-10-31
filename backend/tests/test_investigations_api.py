@@ -195,6 +195,31 @@ def test_completed_allows_new_investigation():
     assert len(r.json()) == 2
 
 
+def test_startup_recovery_completes_audit_record(monkeypatch):
+    """Interrupted pending/running rows become failed with timestamp + message."""
+    import app.main as main_module
+
+    session = TestingSession()
+    pending = Investigation(incident_id=_seed_incident(), status="pending", prompt_version="rca-v1")
+    running = Investigation(incident_id=_seed_incident(), status="running", prompt_version="rca-v1")
+    session.add(pending)
+    session.add(running)
+    session.commit()
+    target_ids = {pending.id, running.id}
+    session.close()
+
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
+    main_module._recover_interrupted()
+
+    rows = TestingSession().query(Investigation).filter(Investigation.id.in_(target_ids)).all()
+    assert len(rows) == 2
+    for row in rows:
+        assert row.status == "failed"
+        assert row.error_code == "interrupted"
+        assert row.error_message
+        assert row.completed_at is not None
+
+
 def test_integrity_error_maps_to_duplicate():
     """The DB unique index is the race-proof guard: concurrent inserts collide."""
 

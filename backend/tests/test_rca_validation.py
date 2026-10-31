@@ -14,7 +14,9 @@ def _valid_rca(**overrides):
         "confidence_estimate": 0.8,
         "confidence_rationale": "r",
         "findings": [{"description": "d", "evidence_ids": ["E-001"], "runbook_ids": ["RB-004"]}],
-        "recommendations": [],
+        "recommendations": [
+            {"title": "t", "steps": ["s"], "risk_level": "low", "requires_approval": True}
+        ],
         "verification_steps": ["v"],
         "limitations": "l",
     }
@@ -62,3 +64,17 @@ def test_confidence_bounds():
         _valid_rca(confidence_estimate=1.5)
     with pytest.raises(ValueError):
         _valid_rca(confidence_estimate=-0.1)
+
+
+def test_diagnosed_without_findings_rejected():
+    with pytest.raises(ValueError):
+        _valid_rca(findings=[])
+
+
+def test_unapproved_recommendation_rejected():
+    with pytest.raises(ValueError):
+        _valid_rca(
+            recommendations=[
+                {"title": "t", "steps": ["s"], "risk_level": "low", "requires_approval": False}
+            ]
+        )

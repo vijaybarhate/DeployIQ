@@ -367,3 +367,21 @@ def test_die_after_oom_event_merges_into_oom_incident(monkeypatch):
     assert len(incidents) == 1
     assert incidents[0].observation_count == 2
     assert "OOMKilled" in incidents[0].title
+
+
+def test_require_migrated_db(tmp_path, monkeypatch):
+    """Watcher refuses to run against an unmigrated database."""
+    from sqlalchemy import create_engine
+
+    from app.collector import watch
+    from app.db.base import Base
+
+    empty = create_engine(f"sqlite:///{tmp_path}/empty.db")
+    monkeypatch.setattr(watch, "engine", empty)
+    with pytest.raises(SystemExit):
+        watch._require_migrated_db()
+
+    ready = create_engine(f"sqlite:///{tmp_path}/ready.db")
+    Base.metadata.create_all(bind=ready)
+    monkeypatch.setattr(watch, "engine", ready)
+    watch._require_migrated_db()  # no raise

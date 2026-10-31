@@ -25,7 +25,7 @@ from app.collector.docker_watcher import (
 from app.collector.log_stream import collect_recent, collect_since
 from app.config import get_settings
 from app.core.logging import get_logger, setup_logging
-from app.db.session import SessionLocal, init_db
+from app.db.session import SessionLocal, engine
 from app.evidence.extractor import count_matching_lines, extract_evidence
 from app.schemas.incident import EvidenceItem, IncidentSource
 from app.services.ingestion import OutOfScopeError, ingest_event
@@ -283,6 +283,19 @@ def _tail_containers(  # type: ignore[no-untyped-def]
             )
 
 
+def _require_migrated_db() -> None:
+    """Fail fast unless Alembic migrations have created the incident tables.
+
+    The watcher must never create schema itself: an unmigrated database would
+    diverge from Alembic history (e.g. missing investigations table).
+    """
+    from sqlalchemy import inspect
+
+    if "incidents" not in inspect(engine).get_table_names():
+        log.error("database schema not initialized: run 'alembic upgrade head' from backend/ first")
+        raise SystemExit(2)
+
+
 def run(project: str, poll_seconds: float = 2.0) -> None:
     settings = get_settings()
     log.info("monitored projects: %s", settings.monitored_project_list)
@@ -291,7 +304,7 @@ def run(project: str, poll_seconds: float = 2.0) -> None:
     except DockerUnavailableError as exc:
         log.error("collector disconnected: %s", exc)
         raise SystemExit(2) from exc
-    init_db()
+    _require_migrated_db()
     session = SessionLocal()
     seen_ts: dict[str, int] = {}
     seen_ids: dict[str, float] = {}

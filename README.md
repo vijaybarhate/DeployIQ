@@ -4,8 +4,9 @@ Automated root-cause analysis and grounded incident remediation via multi-agent 
 
 ## Status
 
-Foundation only. No application modules implemented yet — backend structure is under
-architecture review with GPT-6 (see ChatGPT mentorship conversation).
+Milestones M1–M3.2 implemented on feature branches (see GitHub PRs); `main`
+tracks stable releases only. See the ChatGPT mentorship conversation for
+architecture reviews.
 
 ## Stack (MVP)
 
@@ -31,7 +32,10 @@ architecture review with GPT-6 (see ChatGPT mentorship conversation).
    (Verify the existing schema matches the baseline before stamping.)
 4. Start the API from `backend/` (migrations must run first):
    `$env:MONITORED_PROJECTS="deployiq-demo"; .venv/Scripts/python -m uvicorn app.main:app`
-5. Frontend and RAG/AI setup instructions will be added as those milestones land.
+5. Start the watcher from `backend/` (same requirement — it exits instead of
+   running against an unmigrated database):
+   `$env:MONITORED_PROJECTS="deployiq-demo"; .venv/Scripts/python -m app.collector.watch`
+6. Frontend setup instructions will be added as that milestone lands.
 
 ## Security
 
