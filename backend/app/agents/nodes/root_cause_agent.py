@@ -66,8 +66,8 @@ def build_user_prompt(state: InvestigationState, max_chars: int) -> str:
             for url in (rb.get("source_urls") or [])[:4]:
                 lines.append(f"  source: {url}")
             content = (sections.get(rid, {}) or {}).get("sections", {})
-            for name, body in list(content.items())[:3]:
-                lines.append(f"  [{name}] {body[:1200]}")
+            for name, body in list(content.items())[:2]:
+                lines.append(f"  [{name}] {body[:800]}")
     else:
         lines.append("Retrieved runbooks: none matched. Diagnose from direct evidence only.")
     prompt = "\n".join(lines)
