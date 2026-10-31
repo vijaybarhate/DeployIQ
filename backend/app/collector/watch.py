@@ -235,7 +235,9 @@ def _remember_seen(seen: dict[str, float], identity: str, now: float) -> None:
             del seen[key]
 
 
-def _tail_containers(client, session, project: str, seen_ts: dict, seen_ids: set) -> None:  # type: ignore[no-untyped-def]
+def _tail_containers(  # type: ignore[no-untyped-def]
+    client, session, project: str, seen_ts: dict, seen_ids: dict[str, float]
+):
     """Detect in-app errors (e.g. HTTP 500) that produce no Docker event.
 
     Uses Docker's `since` filter so each poll sees only genuinely new lines.

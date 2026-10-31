@@ -1,5 +1,6 @@
 """Container log collection (stdout/stderr via the Docker SDK)."""
 
+import calendar
 import re
 from datetime import datetime
 
@@ -23,7 +24,7 @@ def parse_log_timestamp_ns(line: str) -> tuple[int, str]:
     try:
         dt = datetime.fromisoformat(f"{m.group(1)}+00:00")
         frac = (m.group(2) or "").ljust(9, "0")[:9]
-        ns = int(dt.timestamp()) * 1_000_000_000 + int(frac or 0)
+        ns = calendar.timegm(dt.utctimetuple()) * 1_000_000_000 + int(frac or 0)
         return ns, m.group(3)
     except (ValueError, OverflowError):
         return 0, line
