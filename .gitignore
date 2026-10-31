@@ -39,8 +39,8 @@ mypy_cache/
 # --- Docker ---
 docker-compose.override.yml
 
-# --- DeployIQ local data ---
-data/
-volumes/
+# --- DeployIQ local data (repository root only; test fixtures live under backend/) ---
+/data/
+/volumes/
 *.sqlite
 *.db

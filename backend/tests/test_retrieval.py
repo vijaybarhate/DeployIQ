@@ -82,17 +82,26 @@ def test_repeated_query_is_deterministic(retriever):
 
 
 def test_eval_precision_recall_at_3(retriever):
+    """Correct IR metrics: P@3, R@3 (macro) and HitRate@3 over multi-label queries."""
     cases = json.loads(EVAL_PATH.read_text(encoding="utf-8"))
     assert len(cases) >= 20, "eval dataset must hold 20-30 labelled queries"
-    hits_at_1 = 0
-    hits_at_3 = 0
+    precisions, recalls, hits = [], [], 0
     for case in cases:
-        ids = [r.runbook_id for r in retriever.retrieve(case["query"], top_k=3)]
-        if ids[:1] == [case["expected"]]:
-            hits_at_1 += 1
-        if case["expected"] in ids:
-            hits_at_3 += 1
-    precision_at_3 = hits_at_3 / len(cases)  # single relevant doc => P@3 == R@3 here
-    precision_at_1 = hits_at_1 / len(cases)
-    print(f"\neval: {len(cases)} queries, P@1={precision_at_1:.2f}, P@3=R@3={precision_at_3:.2f}")
-    assert precision_at_3 >= 0.80, f"P@3 {precision_at_3:.2f} below bar"
+        retrieved = [r.runbook_id for r in retriever.retrieve(case["query"], top_k=3)]
+        relevant = set(case["relevant"])
+        hit = relevant & set(retrieved)
+        precisions.append(len(hit) / 3)
+        recalls.append(len(hit) / len(relevant))
+        hits += 1 if hit else 0
+    macro_p = sum(precisions) / len(precisions)
+    macro_r = sum(recalls) / len(recalls)
+    hit_rate = hits / len(cases)
+    # Ceiling: with k=3 slots and 1-2 relevant docs, max macro P@3 < 1.
+    max_p = sum(min(len(set(c["relevant"])), 3) / 3 for c in cases) / len(cases)
+    print(
+        f"\neval: {len(cases)} queries, P@3={macro_p:.2f} (max {max_p:.2f}), "
+        f"R@3={macro_r:.2f}, HR@3={hit_rate:.2f}"
+    )
+    assert hit_rate >= 0.85, f"HitRate@3 {hit_rate:.2f} below bar"
+    assert macro_r >= 0.80, f"macro R@3 {macro_r:.2f} below bar"
+    assert macro_p >= 0.95 * max_p, f"macro P@3 {macro_p:.2f} below 95% of ceiling"
