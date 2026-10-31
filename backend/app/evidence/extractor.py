@@ -10,6 +10,21 @@ EXC_LINE_RE = re.compile(r"^([A-Za-z_][\w.]*Error[\w.]*|Exception[\w.]*)\s*:\s*(
 FRAME_RE = re.compile(r'^\s*File "([^"]+)", line (\d+), in (\S+)', re.MULTILINE)
 
 
+def count_matching_lines(log_text: str) -> int:
+    """Count lines carrying error evidence (drives matched_line_count)."""
+    n = 0
+    for line in (log_text or "").splitlines():
+        if (
+            PY_TRACEBACK_START.match(line)
+            or EXC_LINE_RE.search(line)
+            or OOM_RE.search(line)
+            or EXIT_CODE_RE.search(line)
+            or HEALTH_RE.search(line)
+        ):
+            n += 1
+    return n
+
+
 def extract_evidence(log_text: str, max_log_chars: int = 20000) -> dict:
     """Return deterministic evidence dict: category, exception, frames, excerpt."""
     trimmed = (log_text or "")[-max_log_chars:]

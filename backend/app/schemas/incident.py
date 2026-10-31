@@ -45,4 +45,5 @@ class IncidentRead(BaseModel):
     evidence: list[EvidenceItem]
     first_seen: datetime
     last_seen: datetime
-    occurrence_count: int
+    observation_count: int
+    matched_line_count: int

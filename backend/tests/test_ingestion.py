@@ -46,7 +46,7 @@ def _ingest(session, project="demo", detail="ZeroDivisionError: division by zero
 def test_ingest_creates_incident(session):
     inc, created = _ingest(session)
     assert created is True
-    assert inc.occurrence_count == 1
+    assert inc.observation_count == 1
     assert inc.status == "open"
     assert inc.severity == "medium"
 
@@ -55,7 +55,7 @@ def test_repeat_events_deduplicate(session):
     for _ in range(5):
         inc, created = _ingest(session)
     assert created is False
-    assert inc.occurrence_count == 5
+    assert inc.observation_count == 5
     assert session.query(Incident).count() == 1
     # Escalation: repeated exceptions become high severity.
     assert inc.severity == "high"

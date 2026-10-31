@@ -8,6 +8,7 @@ evidence) never create incidents. This process performs no LLM calls.
 """
 
 import argparse
+import hashlib
 import queue
 import signal
 import threading
@@ -18,24 +19,19 @@ from app.collector.docker_watcher import (
     connection_status,
     get_client,
     iter_events,
+    normalize_signal,
 )
-from app.collector.log_stream import collect_recent
+from app.collector.log_stream import collect_recent, collect_since
 from app.config import get_settings
 from app.core.logging import get_logger, setup_logging
 from app.db.session import SessionLocal, init_db
-from app.evidence.extractor import extract_evidence
-from app.evidence.normalizer import build_signature
+from app.evidence.extractor import count_matching_lines, extract_evidence
+from app.evidence.normalizer import normalize_signature
 from app.schemas.incident import EvidenceItem, IncidentSource
 from app.services.ingestion import OutOfScopeError, ingest_event
 
 log = get_logger(__name__)
 _stop = False
-
-# Suppress tail re-sightings of the same error: Docker `since` has
-# second granularity, so lines from second N can reappear in the poll for
-# second N+1. Window = 2x the default poll interval.
-RESIGHT_WINDOW_SECONDS = 4.0
-_recent_sightings: dict[str, float] = {}
 
 # Recent per-container signals (kill SIGTERM, oom) used to classify a later
 # die event: planned stop vs genuine abrupt kill. TTL covers the daemon's
@@ -48,7 +44,7 @@ def _record_signal(container_id: str, signal: str) -> None:
     if not container_id or not signal:
         return
     bucket = _recent_signals.setdefault(container_id, [])
-    bucket.append((signal.upper(), _time.time()))
+    bucket.append((normalize_signal(signal), _time.time()))
     if len(bucket) > 10:
         del bucket[:-10]
 
@@ -62,12 +58,22 @@ def _recent_signal(container_id: str, signal: str) -> bool:
     return any(s == signal.upper() for s, _ in fresh)
 
 
+def _recent_stop_or_kill(container_id: str) -> bool:
+    """True when an explicit stop/kill was requested for this container recently."""
+    return (
+        _recent_signal(container_id, "SIGTERM")
+        or _recent_signal(container_id, "SIGINT")
+        or _recent_signal(container_id, "SIGHUP")
+        or _recent_signal(container_id, "STOP")
+    )
+
+
 def _handle_sig(*_args):  # type: ignore[no-untyped-def]
     global _stop
     _stop = True
 
 
-def _ingest(session, project, category, detail, logs, action):  # type: ignore[no-untyped-def]
+def _ingest(session, project, category, detail, logs, action, matched_lines=0):  # type: ignore[no-untyped-def]
     ev = extract_evidence(logs)
     evidence = [
         EvidenceItem(
@@ -86,12 +92,14 @@ def _ingest(session, project, category, detail, logs, action):  # type: ignore[n
             raw_logs=logs,
             evidence=evidence,
             allowlist=get_settings().monitored_project_list,
+            matched_lines=matched_lines,
         )
         log.info(
-            "%s incident %s (count=%d): %s",
+            "%s incident %s (observations=%d, matched_lines=%d): %s",
             "created" if created else "updated",
             incident.id,
-            incident.occurrence_count,
+            incident.observation_count,
+            incident.matched_line_count,
             incident.title,
         )
     except OutOfScopeError:
@@ -113,8 +121,10 @@ def _process_event(session, client, event):  # type: ignore[no-untyped-def]
     if action == "restart":
         log.info("ignoring restart of %s (no failure evidence on its own)", event["container_name"])
         return
-    if action == "kill":
-        _record_signal(event["container_id"], event.get("signal", ""))
+    if action in ("kill", "stop"):
+        # Record-only: establishes that a planned shutdown was requested.
+        # `stop` carries no signal attribute; treat it as an operator stop.
+        _record_signal(event["container_id"], event.get("signal", "") or "STOP")
         return
     if action == "oom":
         _record_signal(event["container_id"], "OOM")
@@ -129,12 +139,28 @@ def _process_event(session, client, event):  # type: ignore[no-untyped-def]
         _ingest(session, project, "health", f"{event['service']} unhealthy", logs, action)
         return
     if action == "die":
-        if exit_code in ("0", "143", "130"):
-            # 0 = clean exit, 143 = SIGTERM, 130 = SIGINT: orchestrator or
-            # operator stop. Never an incident, even if old log history
-            # contains past errors.
+        if exit_code == "0":
+            # Exit status 0 is success by definition: never an incident,
+            # even if old log history contains past errors.
+            log.info("ignoring clean exit of %s", event["container_name"])
+            return
+        if exit_code in ("143", "130") and _recent_stop_or_kill(event["container_id"]):
+            # SIGTERM/SIGINT after an explicit stop/kill request: planned.
             log.info(
                 "ignoring planned shutdown of %s (exit %s)", event["container_name"], exit_code
+            )
+            return
+        if exit_code in ("143", "130"):
+            # Signal exit with NO preceding stop/kill request: suspicious
+            # (stray signal, OOM-adjacent kill). Keep as an incident.
+            _ingest(
+                session,
+                project,
+                ev["category"] if ev["category"] != "unknown" else "exit_code",
+                ev["exception_type"] or f"exit code {exit_code}",
+                logs,
+                action,
+                matched_lines=count_matching_lines(logs),
             )
             return
         if exit_code == "137" and _recent_signal(event["container_id"], "SIGTERM"):
@@ -170,7 +196,14 @@ def _event_pump(client, project: str, outbox: queue.Queue) -> None:
         log.error("event stream ended: %s", exc)
 
 
-def _tail_containers(client, session, project: str, seen_ts: dict) -> None:  # type: ignore[no-untyped-def]
+def _line_identity(container_id: str, line: tuple[int, str, str]) -> str:
+    """Stable per-line identity: container + nanosecond timestamp + stream + content hash."""
+    ts_ns, stream, msg = line
+    fingerprint = hashlib.sha256(normalize_signature(msg).encode("utf-8")).hexdigest()[:16]
+    return f"{container_id}|{ts_ns}|{stream}|{fingerprint}"
+
+
+def _tail_containers(client, session, project: str, seen_ts: dict, seen_ids: set) -> None:  # type: ignore[no-untyped-def]
     """Detect in-app errors (e.g. HTTP 500) that produce no Docker event.
 
     Uses Docker's `since` filter so each poll sees only genuinely new lines.
@@ -194,27 +227,28 @@ def _tail_containers(client, session, project: str, seen_ts: dict) -> None:  # t
         if container.id not in seen_ts:
             seen_ts[container.id] = now  # skip pre-existing history on first sight
             continue
-        try:
-            out = container.logs(since=seen_ts[container.id], stdout=True, stderr=True)
-        except Exception as exc:
-            log.warning("tail failed for %s: %s", container.name, exc)
-            continue
+        lines = collect_since(container, seen_ts[container.id])
         seen_ts[container.id] = now
-        new_text = out.decode("utf-8", errors="replace") if isinstance(out, bytes) else str(out)
-        if not new_text.strip():
+        fresh = [ln for ln in lines if _line_identity(container.id, ln) not in seen_ids]
+        for ln in lines:
+            seen_ids.add(_line_identity(container.id, ln))
+        if len(seen_ids) > 20000:
+            seen_ids.clear()
+        if not fresh:
             continue
+        new_text = "\n".join(msg for _, _, msg in fresh)
         ev = extract_evidence(new_text)
         if ev["category"] != "unknown":
             detail = ev["exception_type"] or ev["category"]
-            sig = build_signature("docker", proj, ev["category"], detail)
-            now_t = _time.time()
-            last = _recent_sightings.get(sig, 0.0)
-            if now_t - last < RESIGHT_WINDOW_SECONDS:
-                continue  # same-second re-sighting of an just-ingested error
-            _recent_sightings[sig] = now_t
-            if len(_recent_sightings) > 1000:
-                _recent_sightings.clear()
-            _ingest(session, proj, ev["category"], detail, new_text, "log-tail")
+            _ingest(
+                session,
+                proj,
+                ev["category"],
+                detail,
+                new_text,
+                "log-tail",
+                matched_lines=count_matching_lines(new_text),
+            )
 
 
 def run(project: str, poll_seconds: float = 2.0) -> None:
@@ -228,6 +262,7 @@ def run(project: str, poll_seconds: float = 2.0) -> None:
     init_db()
     session = SessionLocal()
     seen_ts: dict[str, int] = {}
+    seen_ids: set[str] = set()
     outbox: queue.Queue = queue.Queue()
     pump = threading.Thread(target=_event_pump, args=(client, project, outbox), daemon=True)
     pump.start()
@@ -239,7 +274,7 @@ def run(project: str, poll_seconds: float = 2.0) -> None:
                 except queue.Empty:
                     break
                 _process_event(session, client, event)
-            _tail_containers(client, session, project, seen_ts)
+            _tail_containers(client, session, project, seen_ts, seen_ids)
             _time.sleep(poll_seconds)
     finally:
         session.close()

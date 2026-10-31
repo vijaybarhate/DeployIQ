@@ -28,7 +28,8 @@ def _to_read(inc: Incident) -> IncidentRead:
         evidence=json.loads(inc.evidence_json or "[]"),
         first_seen=inc.first_seen,
         last_seen=inc.last_seen,
-        occurrence_count=inc.occurrence_count,
+        observation_count=inc.observation_count,
+        matched_line_count=inc.matched_line_count,
     )
 
 

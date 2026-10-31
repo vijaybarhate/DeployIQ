@@ -50,12 +50,12 @@ def test_create_and_fetch_incident():
     r = client.post("/api/v1/incidents", json=PAYLOAD)
     assert r.status_code == 201, r.text
     body = r.json()
-    assert body["occurrence_count"] == 1
+    assert body["observation_count"] == 1
     assert body["source"] == "docker"
 
     r = client.post("/api/v1/incidents", json=PAYLOAD)
     assert r.status_code == 201
-    assert r.json()["occurrence_count"] == 2
+    assert r.json()["observation_count"] == 2
     assert r.json()["id"] == body["id"]
 
     r = client.get("/api/v1/incidents")

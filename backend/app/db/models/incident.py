@@ -53,4 +53,7 @@ class Incident(Base):
     last_seen: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=lambda: datetime.now(UTC)
     )
-    occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Distinct collector observations (polls/events) aggregated into this row.
+    observation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Number of error-evidence log lines extracted across all observations.
+    matched_line_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

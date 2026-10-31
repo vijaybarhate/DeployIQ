@@ -39,6 +39,7 @@ def ingest_event(
     raw_logs: str = "",
     evidence: list[EvidenceItem] | None = None,
     allowlist: list[str] | None = None,
+    matched_lines: int = 0,
 ) -> tuple[Incident, bool]:
     src = str(source.value if isinstance(source, IncidentSource) else source)
     if not is_project_monitored(project_id, allowlist or []):
@@ -60,10 +61,11 @@ def ingest_event(
     )
     now = datetime.now(UTC)
     if existing:
-        existing.occurrence_count += 1
+        existing.observation_count += 1
+        existing.matched_line_count += max(matched_lines, 0)
         existing.last_seen = now
         existing.raw_logs = (existing.raw_logs + "\n" + safe_logs)[-MAX_STORED_LOG_CHARS:]
-        existing.severity = classify_severity(category, existing.occurrence_count)
+        existing.severity = classify_severity(category, existing.observation_count)
         session.commit()
         session.refresh(existing)
         return existing, False
@@ -79,7 +81,8 @@ def ingest_event(
         evidence_json=json.dumps(evidence_payload),
         first_seen=now,
         last_seen=now,
-        occurrence_count=1,
+        observation_count=1,
+        matched_line_count=max(matched_lines, 0),
     )
     session.add(incident)
     session.commit()

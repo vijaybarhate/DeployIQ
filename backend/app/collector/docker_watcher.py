@@ -7,7 +7,7 @@ from app.core.logging import get_logger
 
 log = get_logger(__name__)
 
-WATCHED_ACTIONS = {"die", "oom", "restart", "health_status", "kill"}
+WATCHED_ACTIONS = {"die", "oom", "restart", "health_status", "kill", "stop"}
 
 # The daemon reports kill signals numerically ("15", "9"); normalize to names
 # so rules and logs stay readable.
