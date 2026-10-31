@@ -1,0 +1,46 @@
+# --- Secrets / Env ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Logs ---
+*.log
+logs/
+npm-debug.log*
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- IDE ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- Node ---
+node_modules/
+dist/
+build/
+.next/
+coverage/
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+mypy_cache/
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- DeployIQ local data ---
+data/
+volumes/
+*.sqlite
+*.db
