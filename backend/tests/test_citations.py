@@ -157,6 +157,17 @@ def test_arbitrary_evidence_does_not_trigger_llm():
     )
     assert out["usable_evidence"] is False
 
+    # None / empty / whitespace-only values never count as content.
+    for junk in (None, "", "   "):
+        out = evidence_agent.evidence_agent(
+            {
+                **base,
+                "evidence": [{"id": "E-001", "kind": "exception", "summary": junk, "detail": junk}],
+            }
+        )
+        assert out["usable_evidence"] is False, repr(junk)
+        assert "None" not in out["evidence"][0]["summary"]
+
     for kind, summary in [
         ("exception", "ZeroDivisionError"),
         ("exit_code", "exit code 1"),

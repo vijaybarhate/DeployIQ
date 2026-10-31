@@ -12,9 +12,16 @@ MIN_USABLE_CATEGORIES = ("exception", "exit_code", "oom", "health")
 MAX_LOG_CHARS = 8000
 
 
+def _clean(value: object) -> str:
+    """None -> '', strip whitespace; never produce the literal string 'None'."""
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
 def _ref_is_usable(ref: dict) -> bool:
     return ref.get("kind") in MIN_USABLE_CATEGORIES and bool(
-        str(ref.get("summary", "")) or str(ref.get("detail", ""))
+        _clean(ref.get("summary")) or _clean(ref.get("detail"))
     )
 
 
@@ -28,9 +35,9 @@ def evidence_agent(state: InvestigationState) -> dict:
                 # Redact again at the LLM boundary: stored payloads may carry
                 # user-controlled text that was never sanitized for model use.
                 "id": f"E-{i:03d}",
-                "kind": str(item.get("kind", "unknown")),
-                "summary": redact_secrets(str(item.get("summary", ""))),
-                "detail": redact_secrets(str(item.get("detail", ""))),
+                "kind": _clean(item.get("kind", "unknown")) or "unknown",
+                "summary": redact_secrets(_clean(item.get("summary", ""))),
+                "detail": redact_secrets(_clean(item.get("detail", ""))),
             }
         )
     logs = redact_secrets((state.get("raw_logs", "") or "")[-MAX_LOG_CHARS:])

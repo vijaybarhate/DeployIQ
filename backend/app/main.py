@@ -39,7 +39,12 @@ def _recover_interrupted() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Schema comes from Alembic migrations (run `alembic upgrade head` first).
+    # The same shared gate as the watcher: refuse to serve an unmigrated DB.
     # Only crash recovery runs here; never create_all (see M3.2 notes).
+    from app.db.migrations import require_migrated_db
+    from app.db.session import engine as _engine
+
+    require_migrated_db(_engine)
     _recover_interrupted()
     yield
 

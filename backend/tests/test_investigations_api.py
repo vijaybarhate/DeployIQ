@@ -220,6 +220,40 @@ def test_startup_recovery_completes_audit_record(monkeypatch):
         assert row.completed_at is not None
 
 
+def test_lifespan_enforces_migrations(monkeypatch):
+    """The API lifespan uses the same migration gate as the watcher."""
+    import asyncio
+
+    import app.db.migrations as migrations
+    import app.main as main_module
+
+    calls = []
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
+    monkeypatch.setattr(migrations, "require_migrated_db", lambda engine: calls.append(engine))
+    asyncio.run(_enter_lifespan(main_module))
+    assert len(calls) == 1
+
+
+async def _enter_lifespan(main_module):
+    async with main_module.lifespan(main_module.app):
+        pass
+
+
+def test_lifespan_rejects_unmigrated_db(monkeypatch):
+    import asyncio
+
+    import app.db.migrations as migrations
+    import app.main as main_module
+
+    def _boom(engine):  # noqa: ANN001
+        raise SystemExit(2)
+
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
+    monkeypatch.setattr(migrations, "require_migrated_db", _boom)
+    with pytest.raises(SystemExit):
+        asyncio.run(_enter_lifespan(main_module))
+
+
 def test_integrity_error_maps_to_duplicate():
     """The DB unique index is the race-proof guard: concurrent inserts collide."""
 
