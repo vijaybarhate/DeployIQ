@@ -370,18 +370,61 @@ def test_die_after_oom_event_merges_into_oom_incident(monkeypatch):
 
 
 def test_require_migrated_db(tmp_path, monkeypatch):
-    """Watcher refuses to run against an unmigrated database."""
+    """Matrix: only a fully migrated database is accepted."""
     from sqlalchemy import create_engine
 
     from app.collector import watch
+    from app.db import models as _models  # noqa: F401 (register tables)
     from app.db.base import Base
 
-    empty = create_engine(f"sqlite:///{tmp_path}/empty.db")
-    monkeypatch.setattr(watch, "engine", empty)
+    def engine_at(name, setup):
+        eng = create_engine(f"sqlite:///{tmp_path / name}")
+        setup(eng)
+        monkeypatch.setattr(watch, "engine", eng)
+
+    # 1. Empty database -> reject.
+    engine_at("empty.db", lambda eng: None)
     with pytest.raises(SystemExit):
         watch._require_migrated_db()
 
-    ready = create_engine(f"sqlite:///{tmp_path}/ready.db")
-    Base.metadata.create_all(bind=ready)
-    monkeypatch.setattr(watch, "engine", ready)
+    # 2. Incidents-only (pre-Alembic) database -> reject.
+    def _incidents_only(eng):
+        Base.metadata.tables["incidents"].create(bind=eng)
+
+    engine_at("legacy.db", _incidents_only)
+    with pytest.raises(SystemExit):
+        watch._require_migrated_db()
+
+    # 3. Tables via create_all without Alembic history -> reject.
+    engine_at("nocreate.db", lambda eng: Base.metadata.create_all(bind=eng))
+    with pytest.raises(SystemExit):
+        watch._require_migrated_db()
+
+    # 4. Stamped at 0001 but not upgraded -> reject (revision != head).
+    from alembic.config import Config
+
+    from alembic import command
+    from app.config import get_settings
+
+    def _cfg_for(url):
+        monkeypatch.setenv("DATABASE_URL", url)
+        get_settings.cache_clear()
+        return Config("alembic.ini")
+
+    stamped_url = f"sqlite:///{tmp_path}/stamped.db"
+    Base.metadata.create_all(bind=create_engine(stamped_url))
+    command.stamp(_cfg_for(stamped_url), "0001_baseline_incidents")
+    get_settings.cache_clear()
+    monkeypatch.setattr(watch, "engine", create_engine(stamped_url))
+    with pytest.raises(SystemExit):
+        watch._require_migrated_db()
+
+    # 5. Fully upgraded to head -> accept.
+    url = f"sqlite:///{tmp_path}/full.db"
+    monkeypatch.setenv("DATABASE_URL", url)
+    get_settings.cache_clear()
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "head")
+    get_settings.cache_clear()
+    monkeypatch.setattr(watch, "engine", create_engine(url))
     watch._require_migrated_db()  # no raise

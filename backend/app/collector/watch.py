@@ -14,6 +14,11 @@ import re
 import signal
 import threading
 import time as _time
+from pathlib import Path
+
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from sqlalchemy import inspect, text
 
 from app.collector.docker_watcher import (
     DockerUnavailableError,
@@ -283,16 +288,39 @@ def _tail_containers(  # type: ignore[no-untyped-def]
             )
 
 
+def _migration_head() -> str:
+    """Current Alembic head from the configured migration scripts (not hardcoded)."""
+    cfg = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    heads = ScriptDirectory.from_config(cfg).get_heads()
+    return heads[0] if len(heads) == 1 else ""
+
+
 def _require_migrated_db() -> None:
-    """Fail fast unless Alembic migrations have created the incident tables.
+    """Fail fast unless Alembic migrations were applied to this database.
 
-    The watcher must never create schema itself: an unmigrated database would
-    diverge from Alembic history (e.g. missing investigations table).
+    Table presence alone is not enough: a pre-Alembic database (or one built
+    with raw create_all) lacks version history and would diverge from the
+    migration chain. The watcher never creates schema itself.
     """
-    from sqlalchemy import inspect
-
-    if "incidents" not in inspect(engine).get_table_names():
+    required = {"incidents", "investigations", "alembic_version"}
+    try:
+        with engine.connect() as connection:
+            tables = set(inspect(connection).get_table_names())
+            if not required <= tables:
+                raise SystemExit(2)
+            revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    except SystemExit:
         log.error("database schema not initialized: run 'alembic upgrade head' from backend/ first")
+        raise
+    except Exception as exc:
+        log.error("could not verify migration state: %s", exc)
+        raise SystemExit(2) from exc
+    if revision != (head := _migration_head()) or not head:
+        log.error(
+            "database is at revision %s, expected %s: run 'alembic upgrade head' from backend/",
+            revision,
+            head or "<unknown>",
+        )
         raise SystemExit(2)
 
 

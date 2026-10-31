@@ -135,6 +135,40 @@ def test_unapproved_recommendation_rejected_end_to_end():
     assert out["report_error"].startswith("invalid_schema")
 
 
+def test_arbitrary_evidence_does_not_trigger_llm():
+    """GPT M3.2: non-empty but unrecognized evidence must NOT page the model."""
+    from app.agents.nodes import evidence_agent
+
+    base = {
+        "incident_id": "i1",
+        "project_id": "demo",
+        "source": "docker",
+        "title": "mystery",
+        "error_signature": "sig",
+        "raw_logs": "everything looks normal here",
+    }
+    out = evidence_agent.evidence_agent(
+        {
+            **base,
+            "evidence": [
+                {"id": "E-001", "kind": "custom", "summary": "Some text", "detail": "More text"}
+            ],
+        }
+    )
+    assert out["usable_evidence"] is False
+
+    for kind, summary in [
+        ("exception", "ZeroDivisionError"),
+        ("exit_code", "exit code 1"),
+        ("oom", "OOMKilled"),
+        ("health", "unhealthy"),
+    ]:
+        out = evidence_agent.evidence_agent(
+            {**base, "evidence": [{"id": "E-001", "kind": kind, "summary": summary, "detail": ""}]}
+        )
+        assert out["usable_evidence"] is True, kind
+
+
 def test_evidence_merge_keeps_message_and_frame():
     """GPT M3.2-1: fresh traceback details merge into the existing ref."""
     from app.agents.nodes import evidence_agent

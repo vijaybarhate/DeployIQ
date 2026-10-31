@@ -4,11 +4,18 @@ from app.agents.state import EvidenceRef, InvestigationState
 from app.core.security import redact_secrets
 from app.evidence.extractor import extract_evidence
 
-# Minimum usable-evidence criteria: at least one of these must hold,
-# otherwise the Root Cause Agent is skipped to protect API credits.
+# Minimum usable-evidence categories. A structured reference counts as usable
+# only when its kind is in this allowlist AND it carries non-empty content:
+# arbitrary non-empty evidence must never trigger an LLM call.
 MIN_USABLE_CATEGORIES = ("exception", "exit_code", "oom", "health")
 
 MAX_LOG_CHARS = 8000
+
+
+def _ref_is_usable(ref: dict) -> bool:
+    return ref.get("kind") in MIN_USABLE_CATEGORIES and bool(
+        str(ref.get("summary", "")) or str(ref.get("detail", ""))
+    )
 
 
 def evidence_agent(state: InvestigationState) -> dict:
@@ -57,7 +64,5 @@ def evidence_agent(state: InvestigationState) -> dict:
                     "detail": f"health={fresh['health_status']} oom={fresh['oom']}",
                 }
             )
-    usable = fresh["category"] in MIN_USABLE_CATEGORIES or any(
-        str(item.get("summary", "")) or str(item.get("detail", "")) for item in raw_items
-    )
+    usable = fresh["category"] in MIN_USABLE_CATEGORIES or any(map(_ref_is_usable, refs))
     return {"evidence": refs, "usable_evidence": bool(usable)}
