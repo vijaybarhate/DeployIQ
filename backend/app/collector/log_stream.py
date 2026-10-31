@@ -1,28 +1,30 @@
 """Container log collection (stdout/stderr via the Docker SDK)."""
 
 import re
-from datetime import UTC, datetime
+from datetime import datetime
 
 from app.core.logging import get_logger
 
 log = get_logger(__name__)
 
 # Docker `timestamps=True` prefixes every line: "2026-11-01T03:04:39.123456789Z ..."
-_TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s?(.*)$", re.DOTALL)
+_TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z\s?(.*)$", re.DOTALL)
 
 
 def parse_log_timestamp_ns(line: str) -> tuple[int, str]:
-    """Split a timestamped log line into (epoch_nanoseconds, message)."""
+    """Split a timestamped log line into (epoch_nanoseconds, message).
+
+    The fractional part is parsed as integer nanoseconds directly — never
+    through float timestamps — so digits 7-9 are preserved exactly.
+    """
     m = _TS_RE.match(line)
     if not m:
         return 0, line
     try:
-        iso = m.group(1).replace("Z", "+00:00")
-        dt = datetime.fromisoformat(iso)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        ns = int(dt.timestamp() * 1_000_000_000)
-        return ns, m.group(2)
+        dt = datetime.fromisoformat(f"{m.group(1)}+00:00")
+        frac = (m.group(2) or "").ljust(9, "0")[:9]
+        ns = int(dt.timestamp()) * 1_000_000_000 + int(frac or 0)
+        return ns, m.group(3)
     except (ValueError, OverflowError):
         return 0, line
 

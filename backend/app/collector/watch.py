@@ -10,6 +10,7 @@ evidence) never create incidents. This process performs no LLM calls.
 import argparse
 import hashlib
 import queue
+import re
 import signal
 import threading
 import time as _time
@@ -26,7 +27,6 @@ from app.config import get_settings
 from app.core.logging import get_logger, setup_logging
 from app.db.session import SessionLocal, init_db
 from app.evidence.extractor import count_matching_lines, extract_evidence
-from app.evidence.normalizer import normalize_signature
 from app.schemas.incident import EvidenceItem, IncidentSource
 from app.services.ingestion import OutOfScopeError, ingest_event
 
@@ -196,11 +196,43 @@ def _event_pump(client, project: str, outbox: queue.Queue) -> None:
         log.error("event stream ended: %s", exc)
 
 
+_LINE_WS_RE = re.compile(r"\s+")
+
+
+def _normalize_line(msg: str) -> str:
+    """Line-identity normalizer: fold case/whitespace only, keep ALL numbers.
+
+    Distinct from the incident-signature normalizer (which collapses ports
+    and long numbers for dedup): two different log lines must never share
+    a tail identity, or one of them would be silently dropped.
+    """
+    return _LINE_WS_RE.sub(" ", msg.strip().lower())
+
+
 def _line_identity(container_id: str, line: tuple[int, str, str]) -> str:
     """Stable per-line identity: container + nanosecond timestamp + stream + content hash."""
     ts_ns, stream, msg = line
-    fingerprint = hashlib.sha256(normalize_signature(msg).encode("utf-8")).hexdigest()[:16]
+    fingerprint = hashlib.sha256(_normalize_line(msg).encode("utf-8")).hexdigest()[:16]
     return f"{container_id}|{ts_ns}|{stream}|{fingerprint}"
+
+
+# Bounded identity cache: TTL eviction first, oldest-first trim as a backstop.
+# Clearing the whole cache at once would re-ingest recently seen lines.
+SEEN_ID_TTL_SECONDS = 3600.0
+SEEN_ID_MAX = 30000
+
+
+def _remember_seen(seen: dict[str, float], identity: str, now: float) -> None:
+    seen[identity] = now
+    if len(seen) <= SEEN_ID_MAX:
+        return
+    cutoff = now - SEEN_ID_TTL_SECONDS
+    for key in [k for k, ts in seen.items() if ts < cutoff]:
+        del seen[key]
+    if len(seen) > SEEN_ID_MAX:
+        drop = len(seen) - SEEN_ID_MAX + len(seen) // 4
+        for key in list(seen.keys())[:drop]:
+            del seen[key]
 
 
 def _tail_containers(client, session, project: str, seen_ts: dict, seen_ids: set) -> None:  # type: ignore[no-untyped-def]
@@ -231,9 +263,7 @@ def _tail_containers(client, session, project: str, seen_ts: dict, seen_ids: set
         seen_ts[container.id] = now
         fresh = [ln for ln in lines if _line_identity(container.id, ln) not in seen_ids]
         for ln in lines:
-            seen_ids.add(_line_identity(container.id, ln))
-        if len(seen_ids) > 20000:
-            seen_ids.clear()
+            _remember_seen(seen_ids, _line_identity(container.id, ln), _time.time())
         if not fresh:
             continue
         new_text = "\n".join(msg for _, _, msg in fresh)
@@ -262,7 +292,7 @@ def run(project: str, poll_seconds: float = 2.0) -> None:
     init_db()
     session = SessionLocal()
     seen_ts: dict[str, int] = {}
-    seen_ids: set[str] = set()
+    seen_ids: dict[str, float] = {}
     outbox: queue.Queue = queue.Queue()
     pump = threading.Thread(target=_event_pump, args=(client, project, outbox), daemon=True)
     pump.start()

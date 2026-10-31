@@ -97,7 +97,7 @@ def test_tail_skips_history_and_ingests_once(monkeypatch):
     container = FakeContainer([(base - 60, "stderr", "crashme listening")])
     client = _client_with([container])
     seen_ts: dict = {}
-    seen_ids: set = set()
+    seen_ids: dict = {}
     _tail(client, session, seen_ts, seen_ids)  # first sight: skip history
     assert session.query(Incident).count() == 0
 
@@ -133,7 +133,7 @@ def test_identical_errors_seconds_apart_both_count(monkeypatch):
     container = FakeContainer()
     client = _client_with([container])
     seen_ts: dict = {}
-    seen_ids: set = set()
+    seen_ids: dict = {}
     _tail(client, session, seen_ts, seen_ids)  # init
     assert session.query(Incident).count() == 0
 
@@ -148,6 +148,57 @@ def test_identical_errors_seconds_apart_both_count(monkeypatch):
 
     _tail(client, session, seen_ts, seen_ids)  # same lines re-fetched: no-op
     assert session.query(Incident).one().observation_count == 3
+
+
+def test_ns_precision_preserved_in_digits_7_to_9():
+    """GPT M2.1.1-A: timestamps differing only in ns digits 7-9 stay distinct."""
+    from app.collector.log_stream import parse_log_timestamp_ns
+
+    ns_a, msg_a = parse_log_timestamp_ns("2026-11-01T03:04:39.123456701Z boom")
+    ns_b, msg_b = parse_log_timestamp_ns("2026-11-01T03:04:39.123456799Z boom")
+    assert msg_a == msg_b == "boom"
+    assert ns_a != ns_b
+    assert ns_b - ns_a == 98  # exact nanosecond difference, no float drift
+
+    id_a = watch._line_identity("c1", (ns_a, "stderr", msg_a))
+    id_b = watch._line_identity("c1", (ns_b, "stderr", msg_b))
+    assert id_a != id_b
+
+
+def test_line_identity_keeps_numbers_distinct():
+    """Same second, same stream, lines differing only in a port: distinct."""
+    id_a = watch._line_identity("c1", (1000, "stderr", "listening on port 8000"))
+    id_b = watch._line_identity("c1", (1000, "stderr", "listening on port 8001"))
+    assert id_a != id_b
+
+
+def test_identity_cache_evicts_oldest_not_all(monkeypatch):
+    """GPT M2.1.1-B: over-budget eviction drops oldest, keeps recent."""
+    monkeypatch.setattr(watch, "SEEN_ID_MAX", 4)
+    monkeypatch.setattr(watch, "SEEN_ID_TTL_SECONDS", 1000.0)
+    seen: dict[str, float] = {}
+    watch._remember_seen(seen, "a", 100.0)
+    watch._remember_seen(seen, "b", 101.0)
+    watch._remember_seen(seen, "c", 102.0)
+    watch._remember_seen(seen, "d", 103.0)
+    assert set(seen) == {"a", "b", "c", "d"}
+    watch._remember_seen(seen, "e", 104.0)  # over budget -> evict oldest
+    assert "e" in seen and "d" in seen and "c" in seen  # recent retained
+    assert "a" not in seen  # oldest evicted, not everything cleared
+    assert len(seen) <= 4
+
+
+def test_identity_cache_ttl_evicts_stale(monkeypatch):
+    monkeypatch.setattr(watch, "SEEN_ID_MAX", 4)
+    monkeypatch.setattr(watch, "SEEN_ID_TTL_SECONDS", 10.0)
+    seen: dict[str, float] = {}
+    watch._remember_seen(seen, "old", 0.0)
+    watch._remember_seen(seen, "new", 100.0)
+    watch._remember_seen(seen, "n2", 100.0)
+    watch._remember_seen(seen, "n3", 100.0)
+    watch._remember_seen(seen, "n4", 100.0)  # over budget -> stale 'old' evicted by TTL
+    assert "old" not in seen
+    assert {"new", "n2", "n3", "n4"} <= set(seen)
 
 
 def test_event_action_parsing_handles_status_suffix():
