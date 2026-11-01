@@ -1,9 +1,9 @@
 """Tests: Alembic migrations apply cleanly to a fresh SQLite database."""
 
+from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
-from alembic import command
 from app.config import get_settings
 
 
