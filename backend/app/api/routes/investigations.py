@@ -20,6 +20,12 @@ def _to_read(inv: Investigation) -> InvestigationRead:
         result = json.loads(inv.result_json or "{}") or None
     except ValueError:
         result = None
+    try:
+        evidence_snapshot = json.loads(inv.evidence_snapshot or "[]")
+        if not isinstance(evidence_snapshot, list):
+            evidence_snapshot = []
+    except (ValueError, AttributeError):
+        evidence_snapshot = []
     return InvestigationRead(
         id=inv.id,
         incident_id=inv.incident_id,
@@ -28,6 +34,7 @@ def _to_read(inv: Investigation) -> InvestigationRead:
         actual_model=inv.actual_model,
         prompt_version=inv.prompt_version,
         result=result,
+        evidence_snapshot=evidence_snapshot,
         prompt_tokens=inv.prompt_tokens,
         completion_tokens=inv.completion_tokens,
         total_tokens=inv.total_tokens,

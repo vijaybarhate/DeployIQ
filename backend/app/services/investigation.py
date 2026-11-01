@@ -173,6 +173,7 @@ def _persist_result(
     record.prompt_tokens = int(final_state.get("prompt_tokens", 0) or 0)
     record.completion_tokens = int(final_state.get("completion_tokens", 0) or 0)
     record.total_tokens = int(final_state.get("total_tokens", 0) or 0)
+    record.evidence_snapshot = json.dumps(final_state.get("evidence", []) or [])
     rca = final_state.get("rca")
     if isinstance(rca, RCAReport):
         from app.schemas.investigation import DiagnosisStatus

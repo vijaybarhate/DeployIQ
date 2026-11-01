@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class InvestigationRead(BaseModel):
@@ -14,6 +14,7 @@ class InvestigationRead(BaseModel):
     actual_model: str
     prompt_version: str
     result: dict | None = None
+    evidence_snapshot: list[dict] = Field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
