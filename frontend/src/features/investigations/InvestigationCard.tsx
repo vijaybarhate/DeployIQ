@@ -27,10 +27,12 @@ const STATUS_LABELS: Record<Investigation['status'], string> = {
 };
 
 export function InvestigationStatusBadge({ status }: { status: Investigation['status'] }) {
+  // Static badge: the workbench owns the single live announcement region.
+  // Exposing text (not color alone) keeps status perceivable without AT.
   return (
     <span
-      role="status"
-      aria-label={`Investigation status: ${STATUS_LABELS[status]}`}
+      data-testid="investigation-status-badge"
+      title={`Status: ${STATUS_LABELS[status]}`}
       className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
     >
       {STATUS_LABELS[status]}
@@ -60,21 +62,24 @@ export function InvestigationCard({ investigation: inv, expanded, nowMs, onToggl
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        aria-label={`${expanded ? 'Collapse' : 'Expand'} investigation ${inv.id.slice(0, 8)}`}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} investigation ${inv.id.slice(0, 8)}, status ${STATUS_LABELS[inv.status]}`}
         className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left hover:bg-slate-900"
       >
         <InvestigationStatusBadge status={inv.status} />
         <span className="font-mono text-xs text-slate-400">{inv.id.slice(0, 8)}</span>
         {inv.status === 'pending' ? (
-          <span className="text-xs text-slate-400">Queued — waiting to start</span>
+          <span className="text-xs text-slate-400">
+            Queued — waiting to start · model: {inv.requested_model || '—'}
+          </span>
         ) : inv.status === 'running' ? (
           <span className="flex items-center gap-1 text-xs text-sky-300">
             <span
               aria-hidden="true"
-              className="inline-block h-3 w-3 rounded-full border-2 border-sky-400 border-t-transparent motion-safe:animate-spin"
+              className="inline-block h-3 w-3 rounded-full border-2 border-sky-400 border-t-transparent motion-safe:animate-spin motion-reduce:animate-none"
             />
             Actively investigating
-            <ElapsedSince startIso={inv.started_at ?? inv.created_at} nowMs={nowMs} />
+            <ElapsedSince startIso={inv.started_at} nowMs={nowMs} />
+            <span className="text-slate-400">· model: {inv.actual_model || inv.requested_model || '—'}</span>
           </span>
         ) : (
           <span className="text-xs text-slate-400">
@@ -99,8 +104,8 @@ export function InvestigationCard({ investigation: inv, expanded, nowMs, onToggl
 
 import { elapsedSeconds, formatElapsed, parseInstant } from '../../lib/time';
 
-function ElapsedSince({ startIso, nowMs }: { startIso: string; nowMs: number }) {
-  const secs = elapsedSeconds(parseInstant(startIso), nowMs);
+function ElapsedSince({ startIso, nowMs }: { startIso: string | null; nowMs: number }) {
+  const secs = elapsedSeconds(startIso ? parseInstant(startIso) : null, nowMs);
   if (secs === null) return null;
   const text = formatElapsed(secs);
   return <span aria-label={`elapsed ${text}`}>· {text}</span>;

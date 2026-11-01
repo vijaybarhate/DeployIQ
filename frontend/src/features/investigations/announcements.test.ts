@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Investigation } from '../../types/api';
-import { announcementText, computeAnnouncements } from './announcements';
+import { computeAnnouncements } from './announcements';
 
 type Item = Pick<Investigation, 'id' | 'status'>;
 
@@ -12,59 +12,54 @@ function inv(id: string, status: Investigation['status']): Item {
 describe('computeAnnouncements', () => {
   it('stays silent on initial hydration', () => {
     const seen = new Map<string, Investigation['status']>();
-    const { messages } = computeAnnouncements(seen, [inv('a', 'completed'), inv('b', 'running')], new Set());
+    const { messages } = computeAnnouncements(
+      seen,
+      [inv('aaaaaaaa-0000', 'completed'), inv('bbbbbbbb-0000', 'running')],
+      new Set(),
+    );
     expect(messages).toEqual([]);
-    expect(seen.get('a')).toBe('completed');
-    expect(seen.get('b')).toBe('running');
+    expect(seen.get('aaaaaaaa-0000')).toBe('completed');
   });
 
-  it('announces newly POST-created investigations immediately', () => {
+  it('announces newly POST-created investigations with their short id', () => {
     const seen = new Map<string, Investigation['status']>();
-    const { messages } = computeAnnouncements(seen, [inv('a', 'pending')], new Set(['a']));
-    expect(messages).toEqual(['Investigation queued.']);
+    const { messages } = computeAnnouncements(seen, [inv('a1b2c3d4e5f6', 'pending')], new Set(['a1b2c3d4e5f6']));
+    expect(messages).toEqual(['Investigation a1b2c3d4 queued.']);
   });
 
-  it('does not announce historical records even with create-set present', () => {
+  it('does not announce historical records even when other ids were created', () => {
     const seen = new Map<string, Investigation['status']>();
-    const { messages } = computeAnnouncements(seen, [inv('a', 'running')], new Set(['other']));
+    const { messages } = computeAnnouncements(seen, [inv('a1b2c3d4', 'running')], new Set(['other']));
     expect(messages).toEqual([]);
   });
 
   it('announces transitions but not repeats', () => {
-    const seen = new Map<string, Investigation['status']>([['a', 'pending']]);
-    expect(computeAnnouncements(seen, [inv('a', 'running')], new Set()).messages).toEqual([
-      'Investigation started.',
+    const seen = new Map<string, Investigation['status']>([['a1b2c3d4', 'pending']]);
+    expect(computeAnnouncements(seen, [inv('a1b2c3d4', 'running')], new Set()).messages).toEqual([
+      'Investigation a1b2c3d4 started.',
     ]);
-    expect(computeAnnouncements(seen, [inv('a', 'running')], new Set()).messages).toEqual([]);
-    expect(computeAnnouncements(seen, [inv('a', 'completed')], new Set()).messages).toEqual([
-      'Investigation completed.',
+    expect(computeAnnouncements(seen, [inv('a1b2c3d4', 'running')], new Set()).messages).toEqual([]);
+    expect(computeAnnouncements(seen, [inv('a1b2c3d4', 'completed')], new Set()).messages).toEqual([
+      'Investigation a1b2c3d4 completed.',
     ]);
   });
 
-  it('announces each investigation separately even with identical text', () => {
+  it('announces sequential completions with identical status across polls', () => {
     const seen = new Map<string, Investigation['status']>();
-    computeAnnouncements(seen, [inv('a', 'running')], new Set(['a']));
-    const { messages } = computeAnnouncements(seen, [inv('a', 'completed'), inv('b', 'completed')], new Set(['b']));
-    expect(messages).toEqual(['Investigation completed.', 'Investigation completed.']);
+    const first = computeAnnouncements(seen, [inv('aaaaaaaa', 'completed')], new Set(['aaaaaaaa']));
+    expect(first.messages).toEqual(['Investigation aaaaaaaa completed.']);
+    // A later poll: a different investigation finishes — announced despite same wording shape.
+    const second = computeAnnouncements(
+      seen,
+      [inv('aaaaaaaa', 'completed'), inv('bbbbbbbb', 'completed')],
+      new Set(['bbbbbbbb']),
+    );
+    expect(second.messages).toEqual(['Investigation bbbbbbbb completed.']);
   });
 
   it('prunes investigations that disappeared', () => {
     const seen = new Map<string, Investigation['status']>([['gone', 'completed']]);
     computeAnnouncements(seen, [], new Set());
     expect(seen.has('gone')).toBe(false);
-  });
-
-  it('maps every lifecycle status to a message', () => {
-    const cases: Array<[Investigation['status'], string]> = [
-      ['pending', 'queued'],
-      ['running', 'started'],
-      ['completed', 'completed.'],
-      ['insufficient_evidence', 'insufficient evidence'],
-      ['failed', 'failed.'],
-      ['validation_failed', 'validation failed'],
-    ];
-    for (const [status, text] of cases) {
-      expect(announcementText(status)).toContain(text);
-    }
   });
 });

@@ -57,10 +57,11 @@ describe('InvestigationCard status presentation', () => {
     ['insufficient_evidence', 'Insufficient evidence'],
     ['failed', 'Failed'],
     ['validation_failed', 'Validation failed'],
-  ] as const)('labels %s as "%s" with an accessible name', (status, label) => {
+  ] as const)('labels %s as "%s" with position-independent text', (status, label) => {
     renderCard({ status, result: null });
-    const badge = screen.getByText(label, { exact: true });
-    expect(badge).toHaveAttribute('aria-label', `Investigation status: ${label}`);
+    const badge = screen.getByTestId('investigation-status-badge');
+    expect(badge).toHaveTextContent(label);
+    expect(badge).toHaveAttribute('title', `Status: ${label}`);
   });
 
   it('shows elapsed time for running investigations without fake progress', () => {
@@ -74,13 +75,27 @@ describe('InvestigationCard status presentation', () => {
 
   it('shows a static queued label for pending investigations', () => {
     const { container } = renderCard({ status: 'pending' });
-    expect(screen.getByText('Queued — waiting to start')).toBeInTheDocument();
+    expect(screen.getByText(/Queued — waiting to start/)).toBeInTheDocument();
+    expect(screen.getByText(/model: m/)).toBeInTheDocument();
     expect(container.querySelector('[aria-busy]')).toBeNull();
   });
 
   it('hides elapsed time for invalid timestamps instead of fabricating one', () => {
     renderCard({ status: 'running', started_at: 'not-a-date', created_at: 'also-bad' });
     expect(screen.queryByText(/elapsed/)).toBeNull();
+  });
+
+  it('never falls back to created_at for running elapsed time', () => {
+    // started_at missing but created_at valid: no elapsed shown (no queue-time conflation).
+    renderCard({ status: 'running', started_at: null, created_at: '2026-01-01T00:00:00Z' });
+    expect(screen.getByText(/Actively investigating/)).toBeInTheDocument();
+    expect(screen.queryByText(/elapsed/)).toBeNull();
+  });
+
+  it('keeps model metadata visible in active states', () => {
+    renderCard({ status: 'running', actual_model: '' });
+    // Falls back to the requested model rather than hiding the field.
+    expect(screen.getByText(/model: m\b/)).toBeInTheDocument();
   });
 });
 

@@ -9,10 +9,10 @@ export function IncidentHeader({ incident }: { incident: Incident }) {
         {incident.severity ?? 'unclassified'} · observations {incident.observation_count} · matched
         lines {incident.matched_line_count}
       </p>
-      <p className="mt-1 font-mono text-xs text-slate-500">
+      <p className="mt-1 break-words font-mono text-xs text-slate-500">
         {incident.id} · first seen {incident.first_seen} · last seen {incident.last_seen}
       </p>
-      <p className="mt-1 font-mono text-xs text-slate-500">signature: {incident.error_signature}</p>
+      <p className="mt-1 break-words font-mono text-xs text-slate-500">signature: {incident.error_signature}</p>
     </div>
   );
 }

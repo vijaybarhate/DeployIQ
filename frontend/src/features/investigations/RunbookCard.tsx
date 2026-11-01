@@ -18,7 +18,7 @@ export function RunbookCard({ runbook, headingRef, panelId }: Props) {
   return (
     <div className="rounded border border-slate-800 bg-slate-950 p-3" {...(panelId ? { id: panelId } : {})}>
       <p className="font-mono text-xs text-sky-300">{runbook.runbook_id}</p>
-      <h4 ref={headingRef} tabIndex={-1} className="mt-1 text-sm font-medium text-slate-100 outline-none">
+      <h4 ref={headingRef} tabIndex={-1} className="mt-1 text-sm font-medium text-slate-100 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
         {runbook.title}
       </h4>
       <p className="mt-1 text-xs text-slate-400">

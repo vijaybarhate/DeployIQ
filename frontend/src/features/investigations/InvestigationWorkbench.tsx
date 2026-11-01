@@ -78,7 +78,7 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-medium text-slate-200">Investigation workbench</h2>
         <button
           type="button"
