@@ -255,6 +255,21 @@ describe('Investigation history with multiple attempts', () => {
     expect(screen.getByText('Application exception')).toBeInTheDocument();
   });
 
+  it('activates runbook selection with the keyboard and exposes expanded state', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('boom');
+    const chip = (await screen.findAllByRole('button', { name: 'RB-007' }))[0];
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
+    chip.focus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText(/9\.00/)).toBeInTheDocument();
+    expect(chip).toHaveAttribute('aria-expanded', 'true');
+    // Enter again toggles the selection off.
+    await user.keyboard('{Enter}');
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('shows unavailable notes for cited-but-missing evidence and runbooks', async () => {
     const user = userEvent.setup();
     renderPage();

@@ -1,5 +1,5 @@
 import type { RunbookReference } from '../../types/api';
-import { isSafeHttpUrl } from '../../lib/urls';
+import { normalizeHttpUrl } from '../../lib/urls';
 
 interface Props {
   runbook: RunbookReference;
@@ -7,7 +7,10 @@ interface Props {
 
 /** Runbook reference card: metadata + validated source links. Never fetches. */
 export function RunbookCard({ runbook }: Props) {
-  const validUrls = runbook.source_urls.filter(isSafeHttpUrl);
+  // Normalize once so rendered hrefs never carry whitespace padding.
+  const validUrls = runbook.source_urls
+    .map((u) => normalizeHttpUrl(u))
+    .filter((u): u is string => u !== null);
   const hasInvalid = validUrls.length < runbook.source_urls.length;
 
   return (

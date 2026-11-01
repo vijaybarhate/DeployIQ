@@ -145,20 +145,22 @@ function InvestigationBody({ inv, selectedRunbookId, onSelectRunbook, onCiteEvid
         </p>
       )}
 
-      {selectedRunbookId && (
-        <div id={`runbook-${inv.id}`}>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Referenced runbook
-          </p>
-          <div className="mt-1">
-            {selectedRunbook ? (
-              <RunbookCard runbook={selectedRunbook} />
-            ) : (
-              <MissingReferenceNote kind="Runbook" id={selectedRunbookId} />
-            )}
-          </div>
-        </div>
-      )}
+      <div id={`runbook-${inv.id}`} hidden={!selectedRunbookId}>
+        {selectedRunbookId && (
+          <>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Referenced runbook
+            </p>
+            <div className="mt-1">
+              {selectedRunbook ? (
+                <RunbookCard runbook={selectedRunbook} />
+              ) : (
+                <MissingReferenceNote kind="Runbook" id={selectedRunbookId} />
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -211,7 +213,7 @@ function CompletedReport({
                       key={`${invId}-${eid}`}
                       type="button"
                       onClick={() => onCiteEvidence(investigationAnchor(invId, eid))}
-                      className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-emerald-300 hover:bg-slate-700"
+                      className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-emerald-300 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
                       title={`Show cited evidence ${eid} from this investigation`}
                     >
                       {eid}
@@ -228,7 +230,7 @@ function CompletedReport({
                       aria-expanded={selectedRunbookId === rid}
                       aria-controls={`runbook-${invId}`}
                       onClick={() => onSelectRunbook(selectedRunbookId === rid ? null : rid)}
-                      className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-sky-300 hover:bg-slate-700"
+                      className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-sky-300 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
                       title={`Show retrieved runbook ${rid} from this investigation`}
                     >
                       {rid}

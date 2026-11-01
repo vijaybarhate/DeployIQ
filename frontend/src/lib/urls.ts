@@ -6,19 +6,26 @@
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 
-export function isSafeHttpUrl(raw: unknown): boolean {
-  if (typeof raw !== 'string') return false;
+/** Returns the trimmed URL if safe, otherwise null. */
+export function normalizeHttpUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  // Check the ORIGINAL string: trim() strips \n \t \r, which must fail validation.
+  // eslint-disable-next-line no-control-regex -- intentional: reject control characters in URLs
+  if (/[\u0000-\u001F\u007F]/.test(raw)) return null;
   const trimmed = raw.trim();
-  if (!trimmed || /[\u0000-\u001F\u007F]/.test(trimmed)) return false; // eslint-disable-line no-control-regex -- intentional: reject control characters in URLs
+  if (!trimmed) return null;
   let parsed: URL;
   try {
     parsed = new URL(trimmed);
   } catch {
-    return false;
+    return null;
   }
-  if (!ALLOWED_PROTOCOLS.has(parsed.protocol.toLowerCase())) return false;
-  // Reject deceptive URLs carrying credentials or non-host targets.
-  if (parsed.username !== '' || parsed.password !== '') return false;
-  if (!parsed.hostname) return false;
-  return true;
+  if (!ALLOWED_PROTOCOLS.has(parsed.protocol.toLowerCase())) return null;
+  // Deceptive credentials or missing host: not a safe link target.
+  if (parsed.username !== '' || parsed.password !== '' || !parsed.hostname) return null;
+  return trimmed;
+}
+
+export function isSafeHttpUrl(raw: unknown): boolean {
+  return normalizeHttpUrl(raw) !== null;
 }
