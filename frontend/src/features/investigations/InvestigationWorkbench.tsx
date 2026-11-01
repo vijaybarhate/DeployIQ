@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../lib/api/client';
-import { triggerInvestigation, useInvestigations } from '../../hooks/queries';
+import { triggerInvestigation, useInvestigations, isInvestigationActive } from '../../hooks/queries';
+import { useNow } from '../../hooks/useNow';
 import type { Investigation } from '../../types/api';
 import { InvestigationCard } from './InvestigationCard';
 
@@ -11,12 +12,62 @@ interface Props {
   onCiteEvidence: (anchorId: string) => void;
 }
 
+const STATUS_ANNOUNCEMENTS: Record<Investigation['status'], string | null> = {
+  pending: 'Investigation queued.',
+  running: 'Investigation started.',
+  completed: 'Investigation completed.',
+  insufficient_evidence: 'Investigation completed with insufficient evidence.',
+  failed: 'Investigation failed.',
+  validation_failed: 'Investigation failed validation.',
+};
+
+function announceFor(status: Investigation['status']): string | null {
+  return STATUS_ANNOUNCEMENTS[status] ?? null;
+}
+
 /** Trigger + collapsible per-attempt history. Latest attempt expanded by default. */
 export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvidence }: Props) {
   const history = useInvestigations(incidentId);
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [announcement, setAnnouncement] = useState('');
+  const seenStatuses = useRef(new Map<string, Investigation['status']>());
+
+  const hasActive = (history.data ?? []).some((i) => isInvestigationActive(i.status));
+  // One shared clock for elapsed-time display; ticks only while something is active.
+  const now = useNow(hasActive);
+
+  // Announce genuine transitions only — never on initial hydration, never repeats.
+  // Announce genuine transitions only — never on initial hydration, never
+  // repeats for unchanged statuses.
+  useEffect(() => {
+    const items = history.data;
+    if (!items) return;
+    const prev = seenStatuses.current;
+    const messages: string[] = [];
+    for (const inv of items) {
+      const last = prev.get(inv.id);
+      if (last === undefined) {
+        // First sight of this investigation: record silently (no hydration spam).
+        prev.set(inv.id, inv.status);
+        continue;
+      }
+      if (last !== inv.status) {
+        prev.set(inv.id, inv.status);
+        const text = announceFor(inv.status);
+        if (text) messages.push(text);
+      }
+    }
+    // Drop IDs that no longer exist so the map cannot grow unboundedly.
+    for (const id of [...prev.keys()]) {
+      if (!items.some((i) => i.id === id)) prev.delete(id);
+    }
+    // oxlint flags setState-in-effect; assigning then announcing in the same
+    // effect is the correct pattern for derived announcements from polling.
+    // eslint-disable-next-line react/set-state-in-effect
+    if (messages.length > 0) setAnnouncement(messages.join(' '));
+  }, [history.data]);
 
   async function onInvestigate() {
     setTriggerError(null);
@@ -62,6 +113,9 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
           {triggering ? 'Investigating…' : 'Run AI investigation'}
         </button>
       </div>
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       {triggerError && (
         <p role="alert" className="mt-2 text-sm text-amber-300">
           {triggerError}
@@ -92,6 +146,7 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
                 key={inv.id}
                 investigation={inv}
                 expanded={!isCollapsed(inv, index)}
+                nowMs={now}
                 onToggle={() =>
                   setCollapsed((prev) => ({ ...prev, [inv.id]: !isCollapsed(inv, index) }))
                 }

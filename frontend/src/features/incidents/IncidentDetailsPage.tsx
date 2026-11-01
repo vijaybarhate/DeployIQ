@@ -3,6 +3,7 @@ import { useParams } from 'react-router';
 
 import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/states';
 import { isInvestigationActive, useIncident, useInvestigations } from '../../hooks/queries';
+import { prefersReducedMotion } from '../../hooks/useNow';
 import { IncidentEvidence, IncidentHeader, RawLogs } from './components/IncidentSections';
 import { InvestigationWorkbench } from '../investigations/InvestigationWorkbench';
 
@@ -26,12 +27,17 @@ export function IncidentDetailsPage() {
 
   function handleCiteEvidence(anchorId: string) {
     const el = document.getElementById(anchorId);
-    if (!el) {
+    if (!(el instanceof HTMLElement)) {
       // Referenced evidence is missing from this investigation's snapshot:
-      // keep the selection but do not pretend to navigate anywhere.
+      // do not pretend to navigate anywhere.
       return;
     }
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.tabIndex = -1;
+    el.focus({ preventScroll: true });
+    el.scrollIntoView({
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      block: 'center',
+    });
     el.classList.add('ring-2', 'ring-emerald-500');
     window.setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-500'), 1600);
   }

@@ -259,15 +259,30 @@ describe('Investigation history with multiple attempts', () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('boom');
+    // All runbook chips start unselected.
     const chip = (await screen.findAllByRole('button', { name: 'RB-007' }))[0];
     expect(chip).toHaveAttribute('aria-expanded', 'false');
+    // Enter on the focused chip selects it and moves focus into the panel.
     chip.focus();
     await user.keyboard('{Enter}');
     expect(await screen.findByText(/9\.00/)).toBeInTheDocument();
     expect(chip).toHaveAttribute('aria-expanded', 'true');
-    // Enter again toggles the selection off.
+    expect(document.activeElement?.textContent).toContain('HTTP 500');
+  });
+
+  it('closes the runbook panel with Escape and restores chip focus', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('boom');
+    const chip = (await screen.findAllByRole('button', { name: 'RB-007' }))[0];
+    chip.focus();
     await user.keyboard('{Enter}');
+    expect(await screen.findByText(/9\.00/)).toBeInTheDocument();
+    // Escape closes the panel and returns focus to the originating chip.
+    await user.keyboard('{Escape}');
     expect(chip).toHaveAttribute('aria-expanded', 'false');
+    expect(document.activeElement).toBe(chip);
+    expect(screen.queryByText(/9\.00/)).toBeNull();
   });
 
   it('shows unavailable notes for cited-but-missing evidence and runbooks', async () => {
