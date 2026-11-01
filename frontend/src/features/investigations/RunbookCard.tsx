@@ -3,10 +3,12 @@ import { normalizeHttpUrl } from '../../lib/urls';
 
 interface Props {
   runbook: RunbookReference;
+  headingRef?: React.RefObject<HTMLHeadingElement | null>;
+  panelId?: string;
 }
 
 /** Runbook reference card: metadata + validated source links. Never fetches. */
-export function RunbookCard({ runbook }: Props) {
+export function RunbookCard({ runbook, headingRef, panelId }: Props) {
   // Normalize once so rendered hrefs never carry whitespace padding.
   const validUrls = runbook.source_urls
     .map((u) => normalizeHttpUrl(u))
@@ -14,9 +16,11 @@ export function RunbookCard({ runbook }: Props) {
   const hasInvalid = validUrls.length < runbook.source_urls.length;
 
   return (
-    <div className="rounded border border-slate-800 bg-slate-950 p-3">
+    <div className="rounded border border-slate-800 bg-slate-950 p-3" {...(panelId ? { id: panelId } : {})}>
       <p className="font-mono text-xs text-sky-300">{runbook.runbook_id}</p>
-      <p className="mt-1 text-sm font-medium text-slate-100">{runbook.title}</p>
+      <h4 ref={headingRef} tabIndex={-1} className="mt-1 text-sm font-medium text-slate-100 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
+        {runbook.title}
+      </h4>
       <p className="mt-1 text-xs text-slate-400">
         BM25 relevance score: {runbook.relevance_score.toFixed(2)} (retrieval ranking, not a
         probability)

@@ -120,6 +120,56 @@ describe('IncidentDetailsPage citation navigation', () => {
     expect(target?.className).toMatch(/emerald/);
   });
 
+  it('moves DOM focus to the evidence target on citation click', async () => {
+    const user = userEvent.setup();
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+    renderPage();
+    const citation = await screen.findByRole('button', { name: 'E-001' });
+    await user.click(citation);
+    const target = document.getElementById('evidence-inv-1-E-001');
+    expect(target).not.toBeNull();
+    expect(document.activeElement).toBe(target);
+  });
+
+  it('uses instant scrolling when the user prefers reduced motion', async () => {
+    const user = userEvent.setup();
+    const scrollSpy = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollSpy;
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true,
+      media: '(prefers-reduced-motion: reduce)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+    renderPage();
+    const citation = await screen.findByRole('button', { name: 'E-001' });
+    await user.click(citation);
+    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
+    expect(document.activeElement?.id).toBe('evidence-inv-1-E-001');
+  });
+
+  it('uses smooth scrolling when the user has no motion preference', async () => {
+    const user = userEvent.setup();
+    const scrollSpy = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollSpy;
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+    renderPage();
+    const citation = await screen.findByRole('button', { name: 'E-001' });
+    await user.click(citation);
+    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
+    expect(document.activeElement?.id).toBe('evidence-inv-1-E-001');
+  });
+
   it('shows APPROVAL REQUIRED on recommendations and labels AI confidence', async () => {
     renderPage();
     expect(await screen.findByText('APPROVAL REQUIRED')).toBeInTheDocument();
@@ -196,7 +246,7 @@ describe('Investigation history with multiple attempts', () => {
     renderPage();
     // Newest (inv-1) expanded: findings visible without interaction.
     expect(await screen.findByText('boom')).toBeInTheDocument();
-    expect(screen.getAllByText('completed').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(1);
   });
 
   it('toggles cards independently without affecting each other', async () => {
@@ -259,15 +309,30 @@ describe('Investigation history with multiple attempts', () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('boom');
+    // All runbook chips start unselected.
     const chip = (await screen.findAllByRole('button', { name: 'RB-007' }))[0];
     expect(chip).toHaveAttribute('aria-expanded', 'false');
+    // Enter on the focused chip selects it and moves focus into the panel.
     chip.focus();
     await user.keyboard('{Enter}');
     expect(await screen.findByText(/9\.00/)).toBeInTheDocument();
     expect(chip).toHaveAttribute('aria-expanded', 'true');
-    // Enter again toggles the selection off.
+    expect(document.activeElement?.textContent).toContain('HTTP 500');
+  });
+
+  it('closes the runbook panel with Escape and restores chip focus', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('boom');
+    const chip = (await screen.findAllByRole('button', { name: 'RB-007' }))[0];
+    chip.focus();
     await user.keyboard('{Enter}');
+    expect(await screen.findByText(/9\.00/)).toBeInTheDocument();
+    // Escape closes the panel and returns focus to the originating chip.
+    await user.keyboard('{Escape}');
     expect(chip).toHaveAttribute('aria-expanded', 'false');
+    expect(document.activeElement).toBe(chip);
+    expect(screen.queryByText(/9\.00/)).toBeNull();
   });
 
   it('shows unavailable notes for cited-but-missing evidence and runbooks', async () => {

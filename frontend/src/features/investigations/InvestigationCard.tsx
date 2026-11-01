@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { Investigation, RunbookReference } from '../../types/api';
 import { SeverityBadge } from '../../components/ui/Badges';
@@ -17,10 +17,25 @@ const STATUS_STYLES: Record<Investigation['status'], string> = {
   running: 'bg-blue-900 text-blue-200',
 };
 
+const STATUS_LABELS: Record<Investigation['status'], string> = {
+  pending: 'Queued',
+  running: 'Running',
+  completed: 'Completed',
+  insufficient_evidence: 'Insufficient evidence',
+  failed: 'Failed',
+  validation_failed: 'Validation failed',
+};
+
 export function InvestigationStatusBadge({ status }: { status: Investigation['status'] }) {
+  // Static badge: the workbench owns the single live announcement region.
+  // Exposing text (not color alone) keeps status perceivable without AT.
   return (
-    <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}>
-      {status}
+    <span
+      data-testid="investigation-status-badge"
+      title={`Status: ${STATUS_LABELS[status]}`}
+      className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
+    >
+      {STATUS_LABELS[status]}
     </span>
   );
 }
@@ -28,6 +43,7 @@ export function InvestigationStatusBadge({ status }: { status: Investigation['st
 interface Props {
   investigation: Investigation;
   expanded: boolean;
+  nowMs: number;
   onToggle: () => void;
   onCiteEvidence: (anchorId: string) => void;
 }
@@ -37,7 +53,7 @@ interface Props {
  * Runbook selection lives here (not in the collapsible body) so collapsing
  * and reopening never resets it while the card stays mounted.
  */
-export function InvestigationCard({ investigation: inv, expanded, onToggle, onCiteEvidence }: Props) {
+export function InvestigationCard({ investigation: inv, expanded, nowMs, onToggle, onCiteEvidence }: Props) {
   const [selectedRunbookId, setSelectedRunbookId] = useState<string | null>(null);
 
   return (
@@ -46,14 +62,30 @@ export function InvestigationCard({ investigation: inv, expanded, onToggle, onCi
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        aria-label={`${expanded ? 'Collapse' : 'Expand'} investigation ${inv.id.slice(0, 8)}`}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} investigation ${inv.id.slice(0, 8)}, status ${STATUS_LABELS[inv.status]}`}
         className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left hover:bg-slate-900"
       >
         <InvestigationStatusBadge status={inv.status} />
         <span className="font-mono text-xs text-slate-400">{inv.id.slice(0, 8)}</span>
-        <span className="text-xs text-slate-400">
-          model: {inv.actual_model || inv.requested_model || '—'}
-        </span>
+        {inv.status === 'pending' ? (
+          <span className="text-xs text-slate-400">
+            Queued — waiting to start · model: {inv.requested_model || '—'}
+          </span>
+        ) : inv.status === 'running' ? (
+          <span className="flex items-center gap-1 text-xs text-sky-300">
+            <span
+              aria-hidden="true"
+              className="inline-block h-3 w-3 rounded-full border-2 border-sky-400 border-t-transparent motion-safe:animate-spin motion-reduce:animate-none"
+            />
+            Actively investigating
+            <ElapsedSince startIso={inv.started_at} nowMs={nowMs} />
+            <span className="text-slate-400">· model: {inv.actual_model || inv.requested_model || '—'}</span>
+          </span>
+        ) : (
+          <span className="text-xs text-slate-400">
+            model: {inv.actual_model || inv.requested_model || '—'}
+          </span>
+        )}
         <span className="text-xs text-slate-400">tokens: {inv.total_tokens}</span>
         <span className="text-xs text-slate-400">duration: {(inv.duration_ms / 1000).toFixed(1)}s</span>
         <span className="ml-auto text-xs text-slate-500">{expanded ? '▾' : '▸'}</span>
@@ -70,6 +102,15 @@ export function InvestigationCard({ investigation: inv, expanded, onToggle, onCi
   );
 }
 
+import { elapsedSeconds, formatElapsed, parseInstant } from '../../lib/time';
+
+function ElapsedSince({ startIso, nowMs }: { startIso: string | null; nowMs: number }) {
+  const secs = elapsedSeconds(startIso ? parseInstant(startIso) : null, nowMs);
+  if (secs === null) return null;
+  const text = formatElapsed(secs);
+  return <span aria-label={`elapsed ${text}`}>· {text}</span>;
+}
+
 interface BodyProps {
   inv: Investigation;
   selectedRunbookId: string | null;
@@ -83,6 +124,22 @@ function InvestigationBody({ inv, selectedRunbookId, onSelectRunbook, onCiteEvid
   const selectedRunbook: RunbookReference | undefined = selectedRunbookId
     ? knownRunbooks.get(selectedRunbookId)
     : undefined;
+  const panelHeadingRef = useRef<HTMLHeadingElement | null>(null);
+
+  // Move focus to the panel heading when a runbook is selected.
+  useEffect(() => {
+    if (selectedRunbookId) panelHeadingRef.current?.focus({ preventScroll: true });
+  }, [selectedRunbookId]);
+
+  function handlePanelKeyDown(event: React.KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    // Close the panel and restore focus to the originating chip, which stays mounted.
+    const id = selectedRunbookId;
+    onSelectRunbook(null);
+    if (id) {
+      document.getElementById(`runbook-chip-${inv.id}-${id}`)?.focus();
+    }
+  }
 
   return (
     <div className="space-y-3 border-t border-slate-800 px-3 py-3">
@@ -104,7 +161,8 @@ function InvestigationBody({ inv, selectedRunbookId, onSelectRunbook, onCiteEvid
                   key={e.id}
                   id={anchor}
                   data-testid={anchor}
-                  className="rounded border border-slate-800 p-2 text-sm"
+                  tabIndex={-1}
+                  className="rounded border border-slate-800 p-2 text-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
                 >
                   <p className="font-mono text-xs text-emerald-300">
                     {e.id} · {e.kind}
@@ -145,7 +203,7 @@ function InvestigationBody({ inv, selectedRunbookId, onSelectRunbook, onCiteEvid
         </p>
       )}
 
-      <div id={`runbook-${inv.id}`} hidden={!selectedRunbookId}>
+      <div id={`runbook-${inv.id}`} hidden={!selectedRunbookId} onKeyDown={handlePanelKeyDown}>
         {selectedRunbookId && (
           <>
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
@@ -153,7 +211,11 @@ function InvestigationBody({ inv, selectedRunbookId, onSelectRunbook, onCiteEvid
             </p>
             <div className="mt-1">
               {selectedRunbook ? (
-                <RunbookCard runbook={selectedRunbook} />
+                <RunbookCard
+                  runbook={selectedRunbook}
+                  headingRef={panelHeadingRef}
+                  panelId={`runbook-panel-${inv.id}`}
+                />
               ) : (
                 <MissingReferenceNote kind="Runbook" id={selectedRunbookId} />
               )}
@@ -226,6 +288,7 @@ function CompletedReport({
                   knownRunbooks.has(rid) ? (
                     <button
                       key={`${invId}-${rid}`}
+                      id={`runbook-chip-${invId}-${rid}`}
                       type="button"
                       aria-expanded={selectedRunbookId === rid}
                       aria-controls={`runbook-${invId}`}

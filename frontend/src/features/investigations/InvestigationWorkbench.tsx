@@ -1,28 +1,106 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../lib/api/client';
-import { triggerInvestigation, useInvestigations } from '../../hooks/queries';
+import { triggerInvestigation, useInvestigations, isInvestigationActive } from '../../hooks/queries';
+import { useNow } from '../../hooks/useNow';
 import type { Investigation } from '../../types/api';
+import { computeAnnouncements, pruneCreatedIds } from './announcements';
 import { InvestigationCard } from './InvestigationCard';
 
 interface Props {
   incidentId: string;
   onInvestigated: () => void;
   onCiteEvidence: (anchorId: string) => void;
+  /** Test seam: fixed clock value instead of the ticking shared clock. */
+  nowMs?: number;
 }
 
 /** Trigger + collapsible per-attempt history. Latest attempt expanded by default. */
-export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvidence }: Props) {
+export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvidence, nowMs }: Props) {
   const history = useInvestigations(incidentId);
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [announcement, setAnnouncement] = useState('');
+  const seenStatuses = useRef(new Map<string, Investigation['status']>());
+  const createdIds = useRef(new Set<string>());
+  // Consecutive polls where a triggered ID never appears; dropped after the cap.
+  const createdMisses = useRef(new Map<string, number>());
+  // Re-render trigger so the bounded polling interval below starts/stops
+  // as the pending set changes (refs alone do not trigger renders).
+  const [pendingCount, setPendingCount] = useState(0);
+  // Latest refetch helpers (stable across renders for the interval closure).
+  const refetchRef = useRef(history.refetch);
+  const fetchingRef = useRef(history.isFetching);
+  useEffect(() => {
+    refetchRef.current = history.refetch;
+    fetchingRef.current = history.isFetching;
+  });
+
+  const hasActive = (history.data ?? []).some((i) => isInvestigationActive(i.status));
+  // One shared clock for elapsed-time display; ticks only while active.
+  // nowMs override exists for deterministic tests.
+  const tickNow = useNow(hasActive);
+  const now = nowMs ?? tickNow;
+
+  // Announce genuine transitions only — never on initial hydration, never
+  // repeats for unchanged statuses. Newly POST-created investigations announce
+  // immediately; historical records stay silent. Announced and never-appearing
+  // ids are dropped so the pending set cannot grow unboundedly.
+  // Depends on dataUpdatedAt (not just data reference): React Query keeps the
+  // same data reference when a refetch returns structurally identical data,
+  // but dataUpdatedAt bumps on every SUCCESSFUL refresh. Failed requests do
+  // not bump it and isSuccess is false, so they are never counted as misses.
+  // The pending count uses a functional update and is NOT a dependency:
+  // otherwise the state update itself would re-run this effect and count the
+  // same refresh twice, expiring ghosts early.
+  // eslint-disable-next-line react/set-state-in-effect -- intentional: announce polled transitions
+  useEffect(() => {
+    if (!history.isSuccess) return;
+    const items = history.data;
+    if (!items) return;
+    const { messages, announced } = computeAnnouncements(
+      seenStatuses.current,
+      items,
+      createdIds.current,
+    );
+    pruneCreatedIds(
+      createdIds.current,
+      createdMisses.current,
+      new Set(items.map((i) => i.id)),
+      new Set(announced.map((a) => a.id)),
+    );
+    const pending = createdIds.current.size;
+    setPendingCount((current) => (current === pending ? current : pending));
+    if (messages.length > 0) setAnnouncement(messages.join(' '));
+  }, [history.data, history.dataUpdatedAt, history.isSuccess]);
+
+  // Bounded self-polling: while POST-created IDs are still pending, keep
+  // scheduling successful refreshes even if the parent page stopped polling
+  // (e.g. history holds only terminal investigations). Stops as soon as the
+  // pending set empties via announcement or expiry. Skips ticks while a
+  // request is already in flight so requests never overlap.
+  useEffect(() => {
+    if (pendingCount === 0) return;
+    const id = window.setInterval(() => {
+      if (!fetchingRef.current) void refetchRef.current();
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [pendingCount]);
 
   async function onInvestigate() {
     setTriggerError(null);
     setTriggering(true);
     try {
-      await triggerInvestigation(incidentId);
+      const created = await triggerInvestigation(incidentId);
+      // Mark user-created attempts so the announcer treats them as new,
+      // not as pre-existing history. Sync the pending count immediately —
+      // before the refresh below — so self-polling starts even when that
+      // first refresh fails.
+      if (created && typeof created.id === 'string') {
+        createdIds.current.add(created.id);
+        setPendingCount(createdIds.current.size);
+      }
       await history.refetch();
       onInvestigated();
     } catch (err) {
@@ -51,7 +129,7 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-medium text-slate-200">Investigation workbench</h2>
         <button
           type="button"
@@ -62,6 +140,9 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
           {triggering ? 'Investigating…' : 'Run AI investigation'}
         </button>
       </div>
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       {triggerError && (
         <p role="alert" className="mt-2 text-sm text-amber-300">
           {triggerError}
@@ -92,6 +173,7 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
                 key={inv.id}
                 investigation={inv}
                 expanded={!isCollapsed(inv, index)}
+                nowMs={now}
                 onToggle={() =>
                   setCollapsed((prev) => ({ ...prev, [inv.id]: !isCollapsed(inv, index) }))
                 }
