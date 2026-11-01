@@ -370,6 +370,9 @@ def test_provider_failure_yields_failed_record():
     snapshot = _json.loads(record.evidence_snapshot or "[]")
     assert isinstance(snapshot, list) and len(snapshot) == 1
     assert snapshot[0]["id"] == "E-001"  # evidence preserved despite LLM failure
+    runbooks = _json.loads(record.runbook_snapshot or "[]")
+    assert isinstance(runbooks, list) and len(runbooks) == 1
+    assert runbooks[0]["runbook_id"] == "RB-007"  # retrieved runbooks preserved too
     session.close()
 
     r = client.post(f"/api/v1/incidents/{incident_id}/investigations")
@@ -387,3 +390,38 @@ def test_failed_investigation_returns_502():
         r = client.post(f"/api/v1/incidents/{incident_id}/investigations")
     assert r.status_code == 502, r.text
     assert "timeout" in r.json()["detail"]
+
+
+def test_invalid_rca_yields_validation_failed_with_snapshot():
+    """Fabricated/empty RCA is rejected; runbook + evidence snapshots are kept."""
+    import asyncio
+    import json as _json
+
+    from app.services import investigation as svc
+
+    class _BadRCAProvider:
+        async def complete_json(self, system_prompt, user_prompt):
+            from app.llm.base import LLMCompletion, TokenUsage
+
+            return LLMCompletion(
+                parsed={"diagnosis_status": "diagnosed", "root_cause": None},
+                actual_model="stub/model:free",
+                usage=TokenUsage(1, 1, 2),
+                latency_ms=1,
+            )
+
+    def _bad_pipeline(key):
+        from app.agents.graph import build_graph as _build
+
+        return _BadRCAProvider(), _build(_BadRCAProvider(), StubRetriever(), 5000)
+
+    incident_id = _seed_incident()
+    session = TestingSession()
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(svc, "_get_pipeline", _bad_pipeline)
+        record = asyncio.run(svc.run_investigation(session, incident_id))
+    assert record.status == "validation_failed"
+    assert record.error_code.startswith("invalid_")
+    assert _json.loads(record.evidence_snapshot or "[]")[0]["id"] == "E-001"
+    assert _json.loads(record.runbook_snapshot or "[]")[0]["runbook_id"] == "RB-007"
+    session.close()
