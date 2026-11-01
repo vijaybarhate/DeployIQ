@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -137,8 +137,7 @@ describe('InvestigationWorkbench pending-created cleanup', () => {
     expect(screen.getByRole('status').textContent).toMatch(/ghost-99.*started/);
   });
 
-  it('does not count failed refreshes as misses', async () => {
-    const hist = makeHist();
+  it('does not count failed refreshes as misses', async () => {    const hist = makeHist();
     const ghostPending = makeGhost('pending');
     let shouldFail = false;
     const history: Investigation[] = [hist];
@@ -182,5 +181,68 @@ describe('InvestigationWorkbench pending-created cleanup', () => {
     await client.refetchQueries({ queryKey: ['investigations', 'inc-1'] });
     await waitFor(() => expect(screen.getByRole('status')).not.toHaveTextContent(''));
     expect(screen.getByRole('status').textContent).toMatch(/ghost-99.*started/);
+  });
+
+  it('schedules its own refreshes while a created id is pending, then stops', async () => {
+    const hist = makeHist();
+    const ghostPending = makeGhost('pending');
+    const history: Investigation[] = [hist];
+    let getCalls = 0;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/investigations') && init?.method === 'POST') {
+          return { ok: true, status: 201, statusText: 'Created', json: async () => ghostPending } as Response;
+        }
+        if (url.includes('/investigations')) {
+          getCalls += 1;
+          return { ok: true, status: 200, statusText: 'OK', json: async () => history } as Response;
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWorkbench(client);
+    await screen.findByText('hist-000');
+    const baseline = getCalls;
+
+    // Freeze the clock before triggering: the POST refetch and every later
+    // tick run under fake timers, so only the workbench interval can drive
+    // refreshes (no parent polling exists in this test).
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Run AI investigation' }));
+      });
+      expect(getCalls).toBeGreaterThan(baseline);
+      const afterPost = getCalls;
+
+      for (let i = 0; i < MAX_CREATED_MISSES + 2; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await act(async () => {
+          vi.advanceTimersByTime(5000);
+        });
+      }
+      const afterPolling = getCalls;
+      expect(afterPolling).toBeGreaterThan(afterPost);
+
+      // Ghost expired by now: late arrival stays silent and polling stopped.
+      history.push({ ...ghostPending, status: 'completed' });
+      await act(async () => {
+        await client.refetchQueries({ queryKey: ['investigations', 'inc-1'] });
+        vi.advanceTimersByTime(20000);
+      });
+      expect(getCalls).toBe(afterPolling + 1);
+      // Flush the query update, then assert synchronously (no findBy:
+      // the clock is frozen so waitFor polling would never resolve).
+      await act(async () => {});
+      expect(screen.getByText('ghost-99')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

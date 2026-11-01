@@ -26,6 +26,16 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
   const createdIds = useRef(new Set<string>());
   // Consecutive polls where a triggered ID never appears; dropped after the cap.
   const createdMisses = useRef(new Map<string, number>());
+  // Re-render trigger so the bounded polling interval below starts/stops
+  // as the pending set changes (refs alone do not trigger renders).
+  const [pendingCount, setPendingCount] = useState(0);
+  // Latest refetch helpers (stable across renders for the interval closure).
+  const refetchRef = useRef(history.refetch);
+  const fetchingRef = useRef(history.isFetching);
+  useEffect(() => {
+    refetchRef.current = history.refetch;
+    fetchingRef.current = history.isFetching;
+  });
 
   const hasActive = (history.data ?? []).some((i) => isInvestigationActive(i.status));
   // One shared clock for elapsed-time display; ticks only while active.
@@ -57,8 +67,23 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
       new Set(items.map((i) => i.id)),
       new Set(announced.map((a) => a.id)),
     );
+    const pending = createdIds.current.size;
+    if (pending !== pendingCount) setPendingCount(pending);
     if (messages.length > 0) setAnnouncement(messages.join(' '));
-  }, [history.data, history.dataUpdatedAt, history.isSuccess]);
+  }, [history.data, history.dataUpdatedAt, history.isSuccess, pendingCount]);
+
+  // Bounded self-polling: while POST-created IDs are still pending, keep
+  // scheduling successful refreshes even if the parent page stopped polling
+  // (e.g. history holds only terminal investigations). Stops as soon as the
+  // pending set empties via announcement or expiry. Skips ticks while a
+  // request is already in flight so requests never overlap.
+  useEffect(() => {
+    if (pendingCount === 0) return;
+    const id = window.setInterval(() => {
+      if (!fetchingRef.current) void refetchRef.current();
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [pendingCount]);
 
   async function onInvestigate() {
     setTriggerError(null);
