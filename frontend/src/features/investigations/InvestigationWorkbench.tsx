@@ -135,6 +135,7 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
           type="button"
           onClick={onInvestigate}
           disabled={triggering}
+          data-tour="workbench-trigger"
           className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
         >
           {triggering ? 'Investigating…' : 'Run AI investigation'}
@@ -148,7 +149,7 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
           {triggerError}
         </p>
       )}
-      <div className="mt-3">
+      <div className="mt-3" data-tour="workbench-history">
         <h3 className="text-xs font-medium uppercase tracking-wide text-slate-400">
           Investigation history
         </h3>

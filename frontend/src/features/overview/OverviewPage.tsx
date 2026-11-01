@@ -41,11 +41,11 @@ export function OverviewPage() {
           computed from visible data only — not all-time statistics.
         </p>
       </div>
-      <section aria-label="Collector status" className="rounded-md border border-slate-800 bg-slate-900 p-4">
+      <section aria-label="Collector status" data-tour="overview-collector" className="rounded-md border border-slate-800 bg-slate-900 p-4">
         <h2 className="text-sm font-medium text-slate-200">Collector status</h2>
         <CollectorStatus />
       </section>
-      <section aria-label="Incident counts" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <section aria-label="Incident counts" data-tour="overview-counts" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {statCards.map(([label, value]) => (
           <div key={label} className="rounded-md border border-slate-800 bg-slate-900 p-4">
             <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
@@ -78,7 +78,7 @@ export function OverviewPage() {
             </>
           )}
         </section>
-        <section aria-label="Recent incidents" className="rounded-md border border-slate-800 bg-slate-900 p-4">
+        <section aria-label="Recent incidents" data-tour="overview-recent" className="rounded-md border border-slate-800 bg-slate-900 p-4">
           <h2 className="text-sm font-medium text-slate-200">Recent incidents</h2>
           {recent.length === 0 ? (
             <EmptyState

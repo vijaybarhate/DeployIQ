@@ -247,7 +247,7 @@ function CompletedReport({
   onSelectRunbook,
 }: CompletedProps) {
   return (
-    <div>
+    <div data-tour="workbench-report">
       <p className="text-sm font-medium text-slate-100">{rca.root_cause ?? 'No root cause'}</p>
       <p className="mt-1 text-sm text-slate-300">{rca.explanation}</p>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
