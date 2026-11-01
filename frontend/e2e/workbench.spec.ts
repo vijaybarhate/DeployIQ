@@ -74,18 +74,42 @@ async function mockApi(page: Page, overrides: Record<string, unknown> = {}) {
 }
 
 async function noHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflow, 'page must not scroll horizontally').toBeLessThanOrEqual(1);
+  const ok = await page.evaluate(
+    () => document.documentElement.scrollWidth <= window.innerWidth,
+  );
+  expect(ok, 'page must not scroll horizontally').toBe(true);
 }
 
-test.describe('workbench keyboard flow', () => {
-  test('citation -> runbook panel -> Escape restores focus', async ({ page }) => {
+async function keyboardCitationFlow(page: Page) {
+  const chip = page.getByRole('button', { name: 'RB-007' }).first();
+  await chip.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'HTTP 500' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'HTTP 500' })).toBeFocused();
+  await expect(chip).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('HTTP 500')).toBeHidden();
+  await expect(chip).toBeFocused();
+  await expect(chip).toHaveAttribute('aria-expanded', 'false');
+}
+
+test.describe('workbench keyboard flow (desktop)', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+  test('keyboard citation -> panel -> Escape restores focus @1280px', async ({ page }) => {
     await mockApi(page);
     await page.goto('/incidents/inc-1');
-    await page.getByRole('button', { name: 'RB-007' }).first().click();
-    await expect(page.getByText('HTTP 500')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByText('HTTP 500')).toBeHidden();
+    await keyboardCitationFlow(page);
+    await noHorizontalOverflow(page);
+  });
+});
+
+test.describe('workbench keyboard flow (mobile)', () => {
+  test.use({ viewport: { width: 360, height: 800 } });
+  test('keyboard citation -> panel -> Escape restores focus @360px', async ({ page }) => {
+    await mockApi(page);
+    await page.goto('/incidents/inc-1');
+    await keyboardCitationFlow(page);
+    await noHorizontalOverflow(page);
   });
 });
 

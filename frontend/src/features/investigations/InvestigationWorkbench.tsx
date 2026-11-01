@@ -4,7 +4,7 @@ import { ApiError } from '../../lib/api/client';
 import { triggerInvestigation, useInvestigations, isInvestigationActive } from '../../hooks/queries';
 import { useNow } from '../../hooks/useNow';
 import type { Investigation } from '../../types/api';
-import { computeAnnouncements } from './announcements';
+import { computeAnnouncements, pruneCreatedIds } from './announcements';
 import { InvestigationCard } from './InvestigationCard';
 
 interface Props {
@@ -24,6 +24,8 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
   const [announcement, setAnnouncement] = useState('');
   const seenStatuses = useRef(new Map<string, Investigation['status']>());
   const createdIds = useRef(new Set<string>());
+  // Consecutive polls where a triggered ID never appears; dropped after the cap.
+  const createdMisses = useRef(new Map<string, number>());
 
   const hasActive = (history.data ?? []).some((i) => isInvestigationActive(i.status));
   // One shared clock for elapsed-time display; ticks only while active.
@@ -33,12 +35,23 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
 
   // Announce genuine transitions only — never on initial hydration, never
   // repeats for unchanged statuses. Newly POST-created investigations announce
-  // immediately; historical records stay silent.
+  // immediately; historical records stay silent. Announced and never-appearing
+  // ids are dropped so the pending set cannot grow unboundedly.
   // eslint-disable-next-line react/set-state-in-effect -- intentional: announce polled transitions
   useEffect(() => {
     const items = history.data;
     if (!items) return;
-    const { messages } = computeAnnouncements(seenStatuses.current, items, createdIds.current);
+    const { messages, announced } = computeAnnouncements(
+      seenStatuses.current,
+      items,
+      createdIds.current,
+    );
+    pruneCreatedIds(
+      createdIds.current,
+      createdMisses.current,
+      new Set(items.map((i) => i.id)),
+      new Set(announced.map((a) => a.id)),
+    );
     if (messages.length > 0) setAnnouncement(messages.join(' '));
   }, [history.data]);
 

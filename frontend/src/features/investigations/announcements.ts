@@ -63,3 +63,37 @@ export function computeAnnouncements(
   }
   return { messages, announced };
 }
+
+/**
+ * Maintains the pending-created set across polls: drops ids that were
+ * announced, resets the miss counter for ids present in history, and drops
+ * ids that never appear after `maxMisses` consecutive polls so the set
+ * cannot grow unboundedly.
+ */
+export const MAX_CREATED_MISSES = 10;
+
+export function pruneCreatedIds(
+  created: Set<string>,
+  misses: Map<string, number>,
+  present: ReadonlySet<string>,
+  announcedIds: ReadonlySet<string>,
+  maxMisses: number = MAX_CREATED_MISSES,
+): void {
+  for (const id of announcedIds) {
+    created.delete(id);
+    misses.delete(id);
+  }
+  for (const id of [...created]) {
+    if (present.has(id)) {
+      misses.delete(id);
+      continue;
+    }
+    const n = (misses.get(id) ?? 0) + 1;
+    if (n >= maxMisses) {
+      created.delete(id);
+      misses.delete(id);
+    } else {
+      misses.set(id, n);
+    }
+  }
+}

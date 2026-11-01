@@ -120,6 +120,56 @@ describe('IncidentDetailsPage citation navigation', () => {
     expect(target?.className).toMatch(/emerald/);
   });
 
+  it('moves DOM focus to the evidence target on citation click', async () => {
+    const user = userEvent.setup();
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+    renderPage();
+    const citation = await screen.findByRole('button', { name: 'E-001' });
+    await user.click(citation);
+    const target = document.getElementById('evidence-inv-1-E-001');
+    expect(target).not.toBeNull();
+    expect(document.activeElement).toBe(target);
+  });
+
+  it('uses instant scrolling when the user prefers reduced motion', async () => {
+    const user = userEvent.setup();
+    const scrollSpy = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollSpy;
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true,
+      media: '(prefers-reduced-motion: reduce)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+    renderPage();
+    const citation = await screen.findByRole('button', { name: 'E-001' });
+    await user.click(citation);
+    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
+    expect(document.activeElement?.id).toBe('evidence-inv-1-E-001');
+  });
+
+  it('uses smooth scrolling when the user has no motion preference', async () => {
+    const user = userEvent.setup();
+    const scrollSpy = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollSpy;
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+    renderPage();
+    const citation = await screen.findByRole('button', { name: 'E-001' });
+    await user.click(citation);
+    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
+    expect(document.activeElement?.id).toBe('evidence-inv-1-E-001');
+  });
+
   it('shows APPROVAL REQUIRED on recommendations and labels AI confidence', async () => {
     renderPage();
     expect(await screen.findByText('APPROVAL REQUIRED')).toBeInTheDocument();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Investigation } from '../../types/api';
-import { computeAnnouncements } from './announcements';
+import { computeAnnouncements, MAX_CREATED_MISSES, pruneCreatedIds } from './announcements';
 
 type Item = Pick<Investigation, 'id' | 'status'>;
 
@@ -61,5 +61,43 @@ describe('computeAnnouncements', () => {
     const seen = new Map<string, Investigation['status']>([['gone', 'completed']]);
     computeAnnouncements(seen, [], new Set());
     expect(seen.has('gone')).toBe(false);
+  });
+});
+
+describe('pruneCreatedIds', () => {
+  it('removes announced ids and their miss counters', () => {
+    const created = new Set(['a', 'b']);
+    const misses = new Map([['a', 3]]);
+    pruneCreatedIds(created, misses, new Set(['a', 'b']), new Set(['a']));
+    expect(created.has('a')).toBe(false);
+    expect(misses.has('a')).toBe(false);
+    expect(created.has('b')).toBe(true);
+  });
+
+  it('keeps legitimate pending ids that are present without counting a miss', () => {
+    const created = new Set(['pending-1']);
+    const misses = new Map<string, number>();
+    pruneCreatedIds(created, misses, new Set(['pending-1']), new Set());
+    expect(created.has('pending-1')).toBe(true);
+    expect(misses.has('pending-1')).toBe(false);
+  });
+
+  it('drops ids that never appear after the miss cap', () => {
+    const created = new Set(['ghost']);
+    const misses = new Map<string, number>();
+    for (let i = 0; i < MAX_CREATED_MISSES; i += 1) {
+      pruneCreatedIds(created, misses, new Set(), new Set());
+    }
+    expect(created.has('ghost')).toBe(false);
+    expect(misses.has('ghost')).toBe(false);
+  });
+
+  it('does not drop a pending id before the cap', () => {
+    const created = new Set(['ghost']);
+    const misses = new Map<string, number>();
+    for (let i = 0; i < MAX_CREATED_MISSES - 1; i += 1) {
+      pruneCreatedIds(created, misses, new Set(), new Set());
+    }
+    expect(created.has('ghost')).toBe(true);
   });
 });
