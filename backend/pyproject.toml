@@ -16,21 +16,3 @@ line-length = 100
 select = ["E", "F", "I", "UP", "B"]
 # B008 flags FastAPI's standard `Depends(...)` parameter-default idiom.
 ignore = ["B008"]
-
-[tool.ruff.lint.isort]
-# backend/alembic.ini makes ruff mistake the `alembic` package for first-party
-# code on some machines; pin it (and the other third-party deps) explicitly so
-# local and CI categorization always agree.
-known-third-party = [
-    "alembic",
-    "docker",
-    "fastapi",
-    "httpx",
-    "langgraph",
-    "pydantic",
-    "pydantic_settings",
-    "pytest",
-    "rank_bm25",
-    "reportlab",
-    "sqlalchemy",
-]

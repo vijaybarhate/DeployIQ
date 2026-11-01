@@ -401,22 +401,15 @@ def test_require_migrated_db(tmp_path, monkeypatch):
         watch._require_migrated_db()
 
     # 4. Stamped at 0001 but not upgraded -> reject (revision != head).
-    from pathlib import Path
-
-    from alembic import command
     from alembic.config import Config
 
+    from alembic import command
     from app.config import get_settings
-
-    ALEMBIC_INI = str(Path(__file__).resolve().parents[1] / "alembic.ini")
-    ALEMBIC_DIR = str(Path(__file__).resolve().parents[1] / "migrations")
 
     def _cfg_for(url):
         monkeypatch.setenv("DATABASE_URL", url)
         get_settings.cache_clear()
-        cfg = Config(ALEMBIC_INI)
-        cfg.set_main_option("script_location", ALEMBIC_DIR)
-        return cfg
+        return Config("alembic.ini")
 
     stamped_url = f"sqlite:///{tmp_path}/stamped.db"
     Base.metadata.create_all(bind=create_engine(stamped_url))
@@ -427,8 +420,11 @@ def test_require_migrated_db(tmp_path, monkeypatch):
         watch._require_migrated_db()
 
     # 5. Fully upgraded to head -> accept.
-    full_url = f"sqlite:///{tmp_path}/full.db"
-    command.upgrade(_cfg_for(full_url), "head")
+    url = f"sqlite:///{tmp_path}/full.db"
+    monkeypatch.setenv("DATABASE_URL", url)
     get_settings.cache_clear()
-    monkeypatch.setattr(watch, "engine", create_engine(full_url))
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "head")
+    get_settings.cache_clear()
+    monkeypatch.setattr(watch, "engine", create_engine(url))
     watch._require_migrated_db()  # no raise

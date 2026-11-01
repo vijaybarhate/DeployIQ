@@ -1,15 +1,10 @@
 """Tests: Alembic migrations apply cleanly to a fresh SQLite database."""
 
-from pathlib import Path
-
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
+from alembic import command
 from app.config import get_settings
-
-ALEMBIC_INI = str(Path(__file__).resolve().parents[1] / "alembic.ini")
-ALEMBIC_DIR = str(Path(__file__).resolve().parents[1] / "migrations")
 
 
 def test_migrations_upgrade_head(tmp_path, monkeypatch):
@@ -17,8 +12,7 @@ def test_migrations_upgrade_head(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db}")
     get_settings.cache_clear()
     try:
-        cfg = Config(ALEMBIC_INI)
-        cfg.set_main_option("script_location", ALEMBIC_DIR)
+        cfg = Config("alembic.ini")
         command.upgrade(cfg, "head")
     finally:
         get_settings.cache_clear()
