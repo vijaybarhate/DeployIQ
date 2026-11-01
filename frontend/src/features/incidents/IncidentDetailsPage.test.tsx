@@ -127,13 +127,13 @@ describe('IncidentDetailsPage citation navigation', () => {
   });
 });
 
-const olderRunning: Investigation = {
+const olderCompleted: Investigation = {
   ...investigation,
   id: 'inv-0',
-  status: 'running',
-  result: null,
+  actual_model: 'other/model:free',
+  prompt_version: 'rca-v1',
   created_at: '2026-01-01T00:00:01',
-  completed_at: null,
+  completed_at: '2026-01-01T00:00:02',
 };
 
 function mockFetchTwo() {
@@ -144,7 +144,7 @@ function mockFetchTwo() {
       const body = url.endsWith('/incidents/inc-1')
         ? incident
         : url.includes('/investigations')
-          ? [investigation, olderRunning]
+          ? [investigation, olderCompleted]
           : [];
       return { ok: true, status: 200, statusText: 'OK', json: async () => body } as Response;
     }),
@@ -162,19 +162,36 @@ describe('Investigation history with multiple attempts', () => {
     renderPage();
     // Newest (inv-1) expanded: findings visible without interaction.
     expect(await screen.findByText('boom')).toBeInTheDocument();
-    // Older (inv-0) collapsed: its card header shows, body content hidden.
-    expect(screen.getByText('running')).toBeInTheDocument();
+    expect(screen.getAllByText('completed').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('toggles cards independently and scopes citations per investigation', async () => {
+  it('toggles cards independently without affecting each other', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('boom');
-    // Both attempts reference E-001; each citation button is scoped.
+    // Older card starts collapsed: expand it via its toggle button.
+    const toggle = screen.getByRole('button', { name: /expand investigation inv-0/i });
+    await user.click(toggle);
+    expect(screen.getByRole('button', { name: /collapse investigation inv-0/i })).toBeInTheDocument();
+    // Newest card stays expanded.
+    expect(await screen.findAllByText('boom')).toHaveLength(2);
+  });
+
+  it('scopes identical evidence IDs to their own investigation', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('boom');
+    // Both attempts carry E-001; only the expanded card exposes its citation.
     const buttons = await screen.findAllByRole('button', { name: 'E-001' });
-    expect(buttons).toHaveLength(1); // only the expanded card exposes citations
+    expect(buttons).toHaveLength(1);
     await user.click(buttons[0]);
     expect(document.getElementById('evidence-inv-1-E-001')).not.toBeNull();
+    // Expand the older card: its citation must target its own snapshot.
+    await user.click(screen.getByRole('button', { name: /expand investigation inv-0/i }));
+    const olderButtons = await screen.findAllByRole('button', { name: 'E-001' });
+    expect(olderButtons).toHaveLength(2);
+    await user.click(olderButtons[1]);
+    expect(document.getElementById('evidence-inv-0-E-001')).not.toBeNull();
   });
 });
 

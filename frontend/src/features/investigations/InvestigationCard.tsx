@@ -37,6 +37,7 @@ export function InvestigationCard({ investigation: inv, expanded, onToggle, onCi
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} investigation ${inv.id.slice(0, 8)}`}
         className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left hover:bg-slate-900"
       >
         <InvestigationStatusBadge status={inv.status} />
@@ -45,6 +46,7 @@ export function InvestigationCard({ investigation: inv, expanded, onToggle, onCi
           model: {inv.actual_model || inv.requested_model || '—'}
         </span>
         <span className="text-xs text-slate-400">tokens: {inv.total_tokens}</span>
+        <span className="text-xs text-slate-400">duration: {(inv.duration_ms / 1000).toFixed(1)}s</span>
         <span className="ml-auto text-xs text-slate-500">{expanded ? '▾' : '▸'}</span>
       </button>
       {expanded && <InvestigationBody inv={inv} onCiteEvidence={onCiteEvidence} />}
@@ -59,8 +61,7 @@ function InvestigationBody({
   return (
     <div className="space-y-3 border-t border-slate-800 px-3 py-3">
       <p className="text-xs text-slate-400">
-        Duration: {(inv.duration_ms / 1000).toFixed(1)}s · Prompt {inv.prompt_version} · Created{' '}
-        {inv.created_at}
+        Prompt {inv.prompt_version} · Created {inv.created_at}
         {inv.completed_at ? ` · Completed ${inv.completed_at}` : ''}
       </p>
 
