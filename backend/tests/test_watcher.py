@@ -401,9 +401,9 @@ def test_require_migrated_db(tmp_path, monkeypatch):
         watch._require_migrated_db()
 
     # 4. Stamped at 0001 but not upgraded -> reject (revision != head).
+    from alembic import command
     from alembic.config import Config
 
-    from alembic import command
     from app.config import get_settings
 
     def _cfg_for(url):

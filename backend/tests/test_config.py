@@ -4,13 +4,15 @@ Uses only synthetic sentinel values in temp files — never the real .env.
 """
 
 import textwrap
+from pathlib import Path
 
-from app.config import ENV_FILE, REPO_ROOT, Settings
+from app.config import ENV_FILE, REPO_ROOT, Settings, resolve_env_file
 
 
 def test_env_file_resolves_to_repo_root():
     assert REPO_ROOT.name == "DeployIQ"
-    assert ENV_FILE == REPO_ROOT / ".env"
+    # Module binding must equal the pure resolution function (no drift).
+    assert ENV_FILE == resolve_env_file(REPO_ROOT, Path.cwd())
 
 
 def test_tmp_env_file_is_read(tmp_path, monkeypatch):
