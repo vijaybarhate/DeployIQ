@@ -1,19 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { Link } from 'react-router';
 
 import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/states';
 import { SeverityBadge, SourceBadge, StatusBadge } from '../../components/ui/Badges';
 import { useHealth, useIncidents } from '../../hooks/queries';
-import { filterAndSortIncidents, summarizeIncidents, type IncidentFilter } from '../../lib/incidents';
-
-const EMPTY_FILTER: IncidentFilter = { query: '', source: 'all', status: 'all', sort: 'newest' };
+import { filterAndSortIncidents, summarizeIncidents } from '../../lib/incidents';
 
 export function OverviewPage() {
   const incidents = useIncidents();
   const summary = useMemo(() => summarizeIncidents(incidents.data ?? []), [incidents.data]);
-  const [filter] = useState<IncidentFilter>(EMPTY_FILTER);
   const recent = useMemo(
-    () => filterAndSortIncidents(incidents.data ?? [], { ...filter, sort: 'newest' }).slice(0, 5),
-    [incidents.data, filter],
+    () => filterAndSortIncidents(incidents.data ?? [], { query: '', source: 'all', status: 'all', sort: 'newest' }).slice(0, 5),
+    [incidents.data],
   );
 
   if (incidents.isLoading) return <LoadingState message="Loading incidents…" />;
@@ -32,23 +30,6 @@ export function OverviewPage() {
     ['Docker', summary.bySource['docker'] ?? 0],
     ['GitHub Actions', summary.bySource['github_actions'] ?? 0],
   ];
-
-  if (summary.total === 0) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold">Operational overview</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Metrics are computed from visible data only — not all-time statistics.
-          </p>
-        </div>
-        <EmptyState
-          title="No incidents yet"
-          hint="Trigger a failure in a monitored project (e.g. GET /boom on the demo app) and it will appear here."
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -100,16 +81,17 @@ export function OverviewPage() {
         <section aria-label="Recent incidents" className="rounded-md border border-slate-800 bg-slate-900 p-4">
           <h2 className="text-sm font-medium text-slate-200">Recent incidents</h2>
           {recent.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-400">
-              No incidents yet. Trigger a failure in a monitored project to see it here.
-            </p>
+            <EmptyState
+              title="No incidents yet"
+              hint="Trigger a failure in a monitored project (e.g. GET /boom on the demo app) and it will appear here."
+            />
           ) : (
             <ul className="mt-2 space-y-2">
               {recent.map((i) => (
                 <li key={i.id} className="flex flex-wrap items-center gap-2 text-sm">
-                  <a href={`/incidents/${i.id}`} className="min-w-0 flex-1 truncate text-slate-100 hover:underline">
+                  <Link to={`/incidents/${i.id}`} className="min-w-0 flex-1 truncate text-slate-100 hover:underline">
                     {i.title}
-                  </a>
+                  </Link>
                   <SeverityBadge value={i.severity} />
                   <StatusBadge value={i.status} />
                 </li>
