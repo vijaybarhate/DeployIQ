@@ -37,8 +37,13 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
   // repeats for unchanged statuses. Newly POST-created investigations announce
   // immediately; historical records stay silent. Announced and never-appearing
   // ids are dropped so the pending set cannot grow unboundedly.
+  // Depends on dataUpdatedAt (not just data reference): React Query keeps the
+  // same data reference when a refetch returns structurally identical data,
+  // but dataUpdatedAt bumps on every SUCCESSFUL refresh. Failed requests do
+  // not bump it and isSuccess is false, so they are never counted as misses.
   // eslint-disable-next-line react/set-state-in-effect -- intentional: announce polled transitions
   useEffect(() => {
+    if (!history.isSuccess) return;
     const items = history.data;
     if (!items) return;
     const { messages, announced } = computeAnnouncements(
@@ -53,7 +58,7 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
       new Set(announced.map((a) => a.id)),
     );
     if (messages.length > 0) setAnnouncement(messages.join(' '));
-  }, [history.data]);
+  }, [history.data, history.dataUpdatedAt, history.isSuccess]);
 
   async function onInvestigate() {
     setTriggerError(null);
