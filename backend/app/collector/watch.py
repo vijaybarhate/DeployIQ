@@ -25,7 +25,8 @@ from app.collector.docker_watcher import (
 from app.collector.log_stream import collect_recent, collect_since
 from app.config import get_settings
 from app.core.logging import get_logger, setup_logging
-from app.db.session import SessionLocal, init_db
+from app.db.migrations import require_migrated_db as _require_migrated_db_shared
+from app.db.session import SessionLocal, engine
 from app.evidence.extractor import count_matching_lines, extract_evidence
 from app.schemas.incident import EvidenceItem, IncidentSource
 from app.services.ingestion import OutOfScopeError, ingest_event
@@ -283,6 +284,17 @@ def _tail_containers(  # type: ignore[no-untyped-def]
             )
 
 
+def _migration_head() -> str:
+    from app.db.migrations import migration_head
+
+    return migration_head()
+
+
+def _require_migrated_db() -> None:
+    """Watcher entry point: same shared gate the API lifespan uses."""
+    _require_migrated_db_shared(engine)
+
+
 def run(project: str, poll_seconds: float = 2.0) -> None:
     settings = get_settings()
     log.info("monitored projects: %s", settings.monitored_project_list)
@@ -291,7 +303,7 @@ def run(project: str, poll_seconds: float = 2.0) -> None:
     except DockerUnavailableError as exc:
         log.error("collector disconnected: %s", exc)
         raise SystemExit(2) from exc
-    init_db()
+    _require_migrated_db()
     session = SessionLocal()
     seen_ts: dict[str, int] = {}
     seen_ids: dict[str, float] = {}
