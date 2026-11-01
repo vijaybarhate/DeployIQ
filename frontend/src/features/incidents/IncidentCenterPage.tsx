@@ -42,6 +42,10 @@ export function IncidentCenterPage() {
           Latest {incidents.data?.length ?? 0} incidents. Search and filters apply to the loaded
           collection.
         </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Each row is one crash fingerprint: every repeat sighting raises its observation count
+          instead of opening a duplicate.
+        </p>
       </div>
       <div className="flex flex-wrap gap-2">
         <input

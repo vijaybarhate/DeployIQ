@@ -52,4 +52,11 @@ describe('OverviewPage empty state keeps collector status visible', () => {
     expect(await screen.findByText(/disconnected/)).toBeInTheDocument();
     expect(await screen.findByText(/daemon down/)).toBeInTheDocument();
   });
+
+  it('explains the product on first impression', async () => {
+    mockApi([], { ok: true, service: 'x', docker: { connected: true } });
+    renderPage();
+    expect(await screen.findByText('What am I looking at?')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View incidents' })).toHaveAttribute('href', '/incidents');
+  });
 });

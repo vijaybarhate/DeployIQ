@@ -141,6 +141,10 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
           {triggering ? 'Investigating…' : 'Run AI investigation'}
         </button>
       </div>
+      <p className="mt-1 text-xs text-slate-500">
+        One active investigation at a time — every attempt keeps its own evidence and runbook
+        snapshots below.
+      </p>
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>

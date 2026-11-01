@@ -170,6 +170,14 @@ describe('IncidentDetailsPage citation navigation', () => {
     expect(document.activeElement?.id).toBe('evidence-inv-1-E-001');
   });
 
+  it('explains frozen evidence versus live tail under raw logs', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const citation = await screen.findByRole('button', { name: 'E-001' });
+    await user.click(citation);
+    expect(await screen.findByText(/frozen evidence, not a live tail/)).toBeInTheDocument();
+  });
+
   it('shows APPROVAL REQUIRED on recommendations and labels AI confidence', async () => {
     renderPage();
     expect(await screen.findByText('APPROVAL REQUIRED')).toBeInTheDocument();

@@ -13,6 +13,9 @@ export function IncidentHeader({ incident }: { incident: Incident }) {
         {incident.id} · first seen {incident.first_seen} · last seen {incident.last_seen}
       </p>
       <p className="mt-1 break-words font-mono text-xs text-slate-500">signature: {incident.error_signature}</p>
+      <p className="mt-1 text-xs text-slate-500">
+        Repeat crashes with this signature are grouped here; observations counts sightings.
+      </p>
     </div>
   );
 }
@@ -45,6 +48,10 @@ export function RawLogs({ logs }: { logs: string }) {
   return (
     <section aria-label="Raw logs" data-tour="details-logs" className="rounded-md border border-slate-800 bg-slate-900 p-4">
       <h2 className="text-sm font-medium text-slate-200">Raw logs</h2>
+      <p className="mt-1 text-xs text-slate-500">
+        Exact lines captured from the container when this was detected — frozen evidence, not a
+        live tail. New sightings raise the observation count above.
+      </p>
       {logs ? (
         <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-950 p-3 font-mono text-xs text-slate-300">
           {logs}

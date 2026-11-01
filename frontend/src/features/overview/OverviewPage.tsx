@@ -41,6 +41,32 @@ export function OverviewPage() {
           computed from visible data only — not all-time statistics.
         </p>
       </div>
+      <section
+        aria-label="What DeployIQ does"
+        className="rounded-md border border-emerald-900 bg-emerald-950/30 p-4"
+      >
+        <h2 className="text-sm font-medium text-emerald-200">What am I looking at?</h2>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-300">
+          <li>
+            <strong className="text-slate-100">Watch</strong> — DeployIQ tails your Docker
+            containers&apos; logs around the clock.
+          </li>
+          <li>
+            <strong className="text-slate-100">Group</strong> — repeat crashes with the same
+            fingerprint become a single incident below.
+          </li>
+          <li>
+            <strong className="text-slate-100">Explain</strong> — open an incident, run an AI
+            investigation, and get the root cause plus fix steps.
+          </li>
+        </ol>
+        <p className="mt-2 text-sm">
+          <Link to="/incidents" className="text-emerald-300 hover:underline">
+            View incidents
+          </Link>
+          <span className="text-slate-400"> or press “Take a tour” (top right) for a guided walkthrough.</span>
+        </p>
+      </section>
       <section aria-label="Collector status" data-tour="overview-collector" className="rounded-md border border-slate-800 bg-slate-900 p-4">
         <h2 className="text-sm font-medium text-slate-200">Collector status</h2>
         <CollectorStatus />
