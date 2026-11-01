@@ -44,11 +44,15 @@ def get_retriever() -> BM25Retriever:
     return BM25Retriever(load_runbooks(RUNBOOK_DIR))
 
 
-def _pipeline_key() -> tuple:
+def _pipeline_key(model_override: str | None = None) -> tuple:
+    from app.llm.base import is_free_model
+
     settings = get_settings()
+    if model_override is not None and not is_free_model(model_override):
+        raise ValueError(f"model must be an explicit free model id, got: {model_override!r}")
     key_hash = hashlib.sha256(settings.openrouter_api_key.encode("utf-8")).hexdigest()[:16]
     return (
-        settings.openrouter_model,
+        model_override or settings.openrouter_model,
         tuple(settings.fallback_model_list),
         settings.openrouter_max_output_tokens,
         settings.openrouter_base_url,
@@ -57,7 +61,7 @@ def _pipeline_key() -> tuple:
     )
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=8)
 def _get_pipeline(key: tuple):
     """Compile once and reuse per settings fingerprint (graph reuse, isolated state)."""
     model, fallbacks, max_tokens, base_url, timeout_s, _ = key
@@ -90,8 +94,13 @@ def _initial_state(incident: Incident) -> dict:
     }
 
 
-async def run_investigation(session: Session, incident_id: uuid.UUID) -> Investigation:
+async def run_investigation(
+    session: Session, incident_id: uuid.UUID, model_override: str | None = None
+) -> Investigation:
     settings = get_settings()
+    # Validate the override before creating any record (ValueError -> 422,
+    # no orphan pending row).
+    pipeline_key = _pipeline_key(model_override)
     incident = session.get(Incident, incident_id)
     if incident is None:
         raise KeyError(f"incident not found: {incident_id}")
@@ -99,7 +108,7 @@ async def run_investigation(session: Session, incident_id: uuid.UUID) -> Investi
     record = Investigation(
         incident_id=incident.id,
         status="pending",
-        requested_model=settings.openrouter_model,
+        requested_model=model_override or settings.openrouter_model,
         prompt_version=settings.prompt_version,
     )
     session.add(record)
@@ -124,7 +133,7 @@ async def run_investigation(session: Session, incident_id: uuid.UUID) -> Investi
     session.commit()
     started = time.perf_counter()
     try:
-        _, graph = _get_pipeline(_pipeline_key())
+        _, graph = _get_pipeline(pipeline_key)
         final_state = await graph.ainvoke(_initial_state(incident))
     except LLMError as exc:
         # Setup or provider failure (missing key, non-free model, timeout,

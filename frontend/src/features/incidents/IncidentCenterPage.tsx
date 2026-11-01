@@ -5,6 +5,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/
 import { SeverityBadge, SourceBadge, StatusBadge } from '../../components/ui/Badges';
 import { useIncidents } from '../../hooks/queries';
 import { filterAndSortIncidents, type IncidentFilter, type IncidentSort } from '../../lib/incidents';
+import { formatDateTime } from '../../lib/time';
 
 const EMPTY_FILTER: IncidentFilter = { query: '', source: 'all', status: 'all', sort: 'newest' };
 
@@ -123,7 +124,7 @@ export function IncidentCenterPage() {
                   <td className="whitespace-nowrap px-4 py-2"><SeverityBadge value={i.severity} /></td>
                   <td className="whitespace-nowrap px-4 py-2"><StatusBadge value={i.status} /></td>
                   <td className="px-4 py-2 text-slate-300">{i.observation_count}</td>
-                  <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-slate-400">{i.last_seen}</td>
+                  <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-slate-400">{formatDateTime(i.last_seen)}</td>
                 </tr>
               ))}
             </tbody>

@@ -3,7 +3,8 @@
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.models.investigation import Investigation
@@ -11,6 +12,7 @@ from app.db.session import get_session
 from app.llm.base import LLMError
 from app.schemas.investigation_api import InvestigationRead
 from app.services.investigation import DuplicateActiveInvestigation, run_investigation
+from app.services.reports import build_report_docx
 
 router = APIRouter(prefix="/incidents/{incident_id}/investigations", tags=["investigations"])
 
@@ -54,14 +56,26 @@ def _to_read(inv: Investigation) -> InvestigationRead:
     )
 
 
+class TriggerRequest(BaseModel):
+    """Optional per-investigation model override (must be an explicit free model)."""
+
+    model: str | None = Field(default=None, max_length=256)
+
+
 @router.post("", response_model=InvestigationRead, status_code=201)
 async def trigger_investigation(
-    incident_id: uuid.UUID, session: Session = Depends(get_session)
+    incident_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    payload: TriggerRequest | None = None,
 ) -> InvestigationRead:
     try:
-        record = await run_investigation(session, incident_id)
+        record = await run_investigation(
+            session, incident_id, model_override=payload.model if payload else None
+        )
     except KeyError:
         raise HTTPException(status_code=404, detail="incident not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     except DuplicateActiveInvestigation as exc:
         raise HTTPException(
             status_code=409,
@@ -91,3 +105,20 @@ def investigation_history(
         .all()
     )
     return [_to_read(r) for r in rows]
+
+
+@router.get("/{investigation_id}/report")
+def investigation_report(
+    incident_id: uuid.UUID,
+    investigation_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> Response:
+    record = session.get(Investigation, investigation_id)
+    if record is None or record.incident_id != incident_id:
+        raise HTTPException(status_code=404, detail="investigation not found")
+    content, filename = build_report_docx(session, investigation_id)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

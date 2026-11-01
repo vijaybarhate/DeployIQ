@@ -50,17 +50,10 @@ class OpenRouterProvider:
 
     @staticmethod
     def _is_explicitly_free(model_id: str) -> bool:
-        """Free-only routing guard.
+        """Free-only routing guard (delegates to base.is_free_model)."""
+        from app.llm.base import is_free_model
 
-        Allowed (per OpenRouter docs):
-        - IDs ending ":free" (free catalog variants, zero pricing).
-        - Exactly "openrouter/free" (Free Models Router: documented to fall
-          back only to other free models, pricing zero).
-        Rejected: everything else, including "openrouter/auto" (spend-based
-        routing across paid models) and bare paid model IDs. A comment is not
-        enforcement; this check runs before every request.
-        """
-        return model_id.endswith(":free") or model_id == "openrouter/free"
+        return is_free_model(model_id)
 
     def _enforce_free_only(self, models: list[str]) -> None:
         bad = [m for m in models if not self._is_explicitly_free(m)]

@@ -4,6 +4,7 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -66,3 +67,57 @@ def get_incident(incident_id: uuid.UUID, session: Session = Depends(get_session)
     if row is None:
         raise HTTPException(status_code=404, detail="incident not found")
     return _to_read(row)
+
+
+class ManualIngestRequest(BaseModel):
+    """Manual log submission from the ops console (pasted logs or container tail)."""
+
+    project_id: str = Field(min_length=1, max_length=128)
+    raw_logs: str = Field(min_length=1, max_length=20000)
+    container_name: str = Field(default="", max_length=128)
+
+
+@router.post("/manual", response_model=IncidentRead, status_code=201)
+def create_manual_incident(
+    payload: ManualIngestRequest, session: Session = Depends(get_session)
+) -> IncidentRead:
+    from app.evidence.extractor import extract_evidence
+    from app.evidence.normalizer import build_title
+    from app.schemas.incident import EvidenceItem
+    from app.services.ingestion import OutOfScopeError, ingest_event
+
+    settings = get_settings()
+    ev = extract_evidence(payload.raw_logs)
+    if ev.get("category", "unknown") == "unknown":
+        raise HTTPException(
+            status_code=422, detail="no analyzable evidence in the provided logs"
+        )
+    category = str(ev["category"])
+    detail = str(ev.get("exception_type") or ev.get("exit_code") or category)
+    evidence = [
+        EvidenceItem(
+            kind=category,
+            summary=detail,
+            detail=(
+                f"action=manual exc={ev.get('exception_type', '')} "
+                f"frame={ev.get('last_frame', '')}"
+            ),
+        )
+    ]
+    title = build_title("docker", payload.project_id, category, detail)
+    if payload.container_name.strip():
+        title = f"{title} [{payload.container_name.strip()}]"
+    try:
+        incident, _ = ingest_event(
+            session,
+            source="docker",
+            project_id=payload.project_id,
+            category=category,
+            detail=detail,
+            raw_logs=payload.raw_logs,
+            evidence=evidence,
+            allowlist=settings.monitored_project_list,
+        )
+    except OutOfScopeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return _to_read(incident)

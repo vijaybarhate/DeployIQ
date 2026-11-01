@@ -16,6 +16,34 @@ export interface IncidentEvidenceItem {
   detail: string;
 }
 
+export interface FreeModel {
+  id: string;
+  name: string;
+}
+
+export interface DockerContainer {
+  name: string;
+  short_id: string;
+  status: string;
+  health: string;
+  project: string;
+}
+
+export interface ContainerLogs {
+  name: string;
+  lines: string[];
+  truncated: boolean;
+}
+
+export interface CopilotAnswer {
+  answer: string;
+  evidence_ids: string[];
+  runbook_ids: string[];
+  confidence: number | null;
+  actual_model: string;
+  total_tokens: number;
+}
+
 export interface EvidenceRef extends IncidentEvidenceItem {
   id: string;
 }

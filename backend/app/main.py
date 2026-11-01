@@ -6,7 +6,7 @@ from datetime import UTC
 
 from fastapi import FastAPI
 
-from app.api.routes import health, incidents, investigations
+from app.api.routes import copilot, docker, health, incidents, investigations, models
 from app.config import get_settings
 from app.core.logging import setup_logging
 from app.db.models.investigation import Investigation
@@ -56,6 +56,9 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(incidents.router, prefix="/api/v1")
     app.include_router(investigations.router, prefix="/api/v1")
+    app.include_router(docker.router, prefix="/api/v1")
+    app.include_router(models.router, prefix="/api/v1")
+    app.include_router(copilot.router, prefix="/api/v1")
     return app
 
 

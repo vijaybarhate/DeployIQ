@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { Activity, FlaskConical, LayoutDashboard, Map } from 'lucide-react';
+import { Activity, FlaskConical, LayoutDashboard, Map, TerminalSquare } from 'lucide-react';
 
 import { stepsForRoute } from '../../features/tour/tourSteps';
 import { useProductTour } from '../../features/tour/useProductTour';
@@ -47,6 +47,9 @@ export function AppLayout() {
         <div className="mx-auto flex max-w-6xl gap-1 px-4 py-2">
           <NavLink to="/overview" className={linkClass}>
             <LayoutDashboard className="h-4 w-4" aria-hidden /> Overview
+          </NavLink>
+          <NavLink to="/console" className={linkClass}>
+            <TerminalSquare className="h-4 w-4" aria-hidden /> Ops Console
           </NavLink>
           <NavLink to="/incidents" className={linkClass}>
             <FlaskConical className="h-4 w-4" aria-hidden /> Incidents

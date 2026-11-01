@@ -5,6 +5,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/
 import { SeverityBadge, SourceBadge, StatusBadge } from '../../components/ui/Badges';
 import { useHealth, useIncidents } from '../../hooks/queries';
 import { filterAndSortIncidents, summarizeIncidents } from '../../lib/incidents';
+import { formatDateTime } from '../../lib/time';
 
 export function OverviewPage() {
   const incidents = useIncidents();
@@ -37,7 +38,7 @@ export function OverviewPage() {
         <h1 className="text-xl font-semibold">Operational overview</h1>
         <p className="mt-1 text-sm text-slate-400">
           Latest {summary.total} incidents loaded from the backend
-          {summary.latestSeen ? ` · most recent activity ${summary.latestSeen}` : ''}. Metrics are
+          {summary.latestSeen ? ` · most recent activity ${formatDateTime(summary.latestSeen)}` : ''}. Metrics are
           computed from visible data only — not all-time statistics.
         </p>
       </div>

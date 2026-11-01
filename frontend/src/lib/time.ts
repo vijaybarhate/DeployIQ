@@ -21,3 +21,24 @@ export function formatElapsed(totalSeconds: number | null): string {
   const hours = Math.floor(minutes / 60);
   return `${hours}h ${minutes % 60}m`;
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+/**
+ * Human-readable local timestamp: "01 Nov 2026, 14:16".
+ * Returns the raw value unchanged when it cannot be parsed (never fabricate).
+ */
+export function formatDateTime(value: unknown): string {
+  if (typeof value !== 'string' || !value) return '—';
+  const ms = Date.parse(value);
+  if (Number.isNaN(ms)) return value;
+  const d = new Date(ms);
+  return (
+    `${pad2(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ` +
+    `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+  );
+}

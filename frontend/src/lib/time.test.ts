@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseInstant, elapsedSeconds, formatElapsed } from './time';
+import { parseInstant, elapsedSeconds, formatElapsed, formatDateTime } from './time';
 
 describe('parseInstant', () => {
   it('parses ISO timestamps to epoch ms', () => {
@@ -35,5 +35,18 @@ describe('formatElapsed', () => {
     expect(formatElapsed(95)).toBe('1m 35s');
     expect(formatElapsed(3600)).toBe('1h 0m');
     expect(formatElapsed(3723)).toBe('1h 2m');
+  });
+});
+
+describe('formatDateTime', () => {
+  it('renders timestamps as short local date plus time', () => {
+    const out = formatDateTime('2026-11-01T14:16:06.263475');
+    expect(out).toMatch(/^\d{2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) 2026, \d{2}:\d{2}$/);
+    expect(out).not.toContain('T');
+  });
+  it('never fabricates: passes invalid input through', () => {
+    expect(formatDateTime('not-a-date')).toBe('not-a-date');
+    expect(formatDateTime(null)).toBe('—');
+    expect(formatDateTime('')).toBe('—');
   });
 });

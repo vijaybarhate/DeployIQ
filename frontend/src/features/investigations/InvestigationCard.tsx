@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { Investigation, RunbookReference } from '../../types/api';
 import { SeverityBadge } from '../../components/ui/Badges';
+import { reportDownloadUrl } from '../../lib/api/console';
 import { MissingReferenceNote, RunbookCard } from './RunbookCard';
 
 function investigationAnchor(investigationId: string, evidenceId: string): string {
@@ -102,7 +103,7 @@ export function InvestigationCard({ investigation: inv, expanded, nowMs, onToggl
   );
 }
 
-import { elapsedSeconds, formatElapsed, parseInstant } from '../../lib/time';
+import { elapsedSeconds, formatDateTime, formatElapsed, parseInstant } from '../../lib/time';
 
 function ElapsedSince({ startIso, nowMs }: { startIso: string | null; nowMs: number }) {
   const secs = elapsedSeconds(startIso ? parseInstant(startIso) : null, nowMs);
@@ -144,8 +145,19 @@ function InvestigationBody({ inv, selectedRunbookId, onSelectRunbook, onCiteEvid
   return (
     <div className="space-y-3 border-t border-slate-800 px-3 py-3">
       <p className="text-xs text-slate-400">
-        Prompt {inv.prompt_version} · Created {inv.created_at}
-        {inv.completed_at ? ` · Completed ${inv.completed_at}` : ''}
+        Prompt {inv.prompt_version} · Created {formatDateTime(inv.created_at)}
+        {inv.completed_at ? ` · Completed ${formatDateTime(inv.completed_at)}` : ''}
+        {(inv.status === 'completed' || inv.status === 'insufficient_evidence') && (
+          <>
+            {' · '}
+            <a
+              href={reportDownloadUrl(inv.incident_id, inv.id)}
+              className="text-emerald-300 underline hover:text-emerald-200"
+            >
+              Download report (.docx)
+            </a>
+          </>
+        )}
       </p>
 
       {inv.evidence_snapshot.length > 0 && (

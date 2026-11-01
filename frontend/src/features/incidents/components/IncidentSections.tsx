@@ -1,3 +1,4 @@
+import { formatDateTime } from '../../../lib/time';
 import type { Incident } from '../../../types/api';
 
 export function IncidentHeader({ incident }: { incident: Incident }) {
@@ -10,7 +11,8 @@ export function IncidentHeader({ incident }: { incident: Incident }) {
         lines {incident.matched_line_count}
       </p>
       <p className="mt-1 break-words font-mono text-xs text-slate-500">
-        {incident.id} · first seen {incident.first_seen} · last seen {incident.last_seen}
+        {incident.id} · first seen {formatDateTime(incident.first_seen)} · last seen{' '}
+        {formatDateTime(incident.last_seen)}
       </p>
       <p className="mt-1 break-words font-mono text-xs text-slate-500">signature: {incident.error_signature}</p>
       <p className="mt-1 text-xs text-slate-500">
