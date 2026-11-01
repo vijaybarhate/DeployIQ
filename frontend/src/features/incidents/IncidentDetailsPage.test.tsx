@@ -134,9 +134,43 @@ const olderCompleted: Investigation = {
   prompt_version: 'rca-v1',
   created_at: '2026-01-01T00:00:01',
   completed_at: '2026-01-01T00:00:02',
+  evidence_snapshot: [
+    { id: 'E-001', kind: 'exception', summary: 'older traceback', detail: 'older frame' },
+  ],
+  runbook_snapshot: [
+    {
+      runbook_id: 'RB-007',
+      title: 'HTTP 500',
+      relevance_score: 5.5,
+      matched_sections: ['Application exception'],
+      source_urls: ['https://docs.docker.com/x'],
+    },
+  ],
 };
 
-function mockFetchTwo() {
+const staleCompleted: Investigation = {
+  ...investigation,
+  id: 'inv-9',
+  actual_model: 'third/model:free',
+  created_at: '2026-01-01T00:00:00',
+  completed_at: '2026-01-01T00:00:00',
+  result: {
+    diagnosis_status: 'diagnosed',
+    root_cause: 'stale cause',
+    explanation: 'old',
+    severity_assessment: 'low',
+    confidence_estimate: 0.5,
+    confidence_rationale: 'r',
+    findings: [{ description: 'stale finding', evidence_ids: ['E-999'], runbook_ids: ['RB-999'] }],
+    recommendations: [],
+    verification_steps: [],
+    limitations: '',
+  },
+  evidence_snapshot: [{ id: 'E-001', kind: 'exception', summary: 'old', detail: '' }],
+  runbook_snapshot: [],
+};
+
+function mockFetchThree() {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -144,7 +178,7 @@ function mockFetchTwo() {
       const body = url.endsWith('/incidents/inc-1')
         ? incident
         : url.includes('/investigations')
-          ? [investigation, olderCompleted]
+          ? [investigation, olderCompleted, staleCompleted]
           : [];
       return { ok: true, status: 200, statusText: 'OK', json: async () => body } as Response;
     }),
@@ -154,7 +188,7 @@ function mockFetchTwo() {
 describe('Investigation history with multiple attempts', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
-    mockFetchTwo();
+    mockFetchThree();
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
@@ -192,6 +226,46 @@ describe('Investigation history with multiple attempts', () => {
     expect(olderButtons).toHaveLength(2);
     await user.click(olderButtons[1]);
     expect(document.getElementById('evidence-inv-0-E-001')).not.toBeNull();
+  });
+
+  it('routes runbook citations to the owning investigation snapshot data', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('boom');
+    // Newest card cites RB-007 with relevance 9.0; open its runbook panel.
+    const chips = await screen.findAllByRole('button', { name: 'RB-007' });
+    expect(chips).toHaveLength(1);
+    await user.click(chips[0]);
+    expect(await screen.findByText(/9\.00/)).toBeInTheDocument();
+    expect(screen.getByText('Symptoms')).toBeInTheDocument();
+  });
+
+  it('keeps runbook selection per investigation when both cite the same ID', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('boom');
+    // Select RB-007 in the newest card (relevance 9.0).
+    await user.click((await screen.findAllByRole('button', { name: 'RB-007' }))[0]);
+    expect(await screen.findByText(/9\.00/)).toBeInTheDocument();
+    // Expand the older card and select its RB-007 (relevance 5.5) instead.
+    await user.click(screen.getByRole('button', { name: /expand investigation inv-0/i }));
+    const chips = await screen.findAllByRole('button', { name: 'RB-007' });
+    await user.click(chips[1]);
+    expect(await screen.findByText(/5\.50/)).toBeInTheDocument();
+    expect(screen.getByText('Application exception')).toBeInTheDocument();
+  });
+
+  it('shows unavailable notes for cited-but-missing evidence and runbooks', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('boom');
+    // Expand the stale attempt whose finding cites IDs absent from its snapshot.
+    await user.click(screen.getByRole('button', { name: /expand investigation inv-9/i }));
+    expect(await screen.findByText('stale finding')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'E-999' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'RB-999' })).toBeNull();
+    expect(screen.getByText(/Evidence unavailable: E-999/)).toBeInTheDocument();
+    expect(screen.getByText(/Runbook unavailable: RB-999/)).toBeInTheDocument();
   });
 });
 

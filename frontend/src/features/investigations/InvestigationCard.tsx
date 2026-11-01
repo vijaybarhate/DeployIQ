@@ -1,5 +1,8 @@
-import type { Investigation } from '../../types/api';
+import { useState } from 'react';
+
+import type { Investigation, RunbookReference } from '../../types/api';
 import { SeverityBadge } from '../../components/ui/Badges';
+import { MissingReferenceNote, RunbookCard } from './RunbookCard';
 
 function investigationAnchor(investigationId: string, evidenceId: string): string {
   return `evidence-${investigationId}-${evidenceId}`;
@@ -29,8 +32,14 @@ interface Props {
   onCiteEvidence: (anchorId: string) => void;
 }
 
-/** One investigation attempt: collapsible card with its own report + snapshot. */
+/**
+ * One investigation attempt: collapsible card with its own report + snapshot.
+ * Runbook selection lives here (not in the collapsible body) so collapsing
+ * and reopening never resets it while the card stays mounted.
+ */
 export function InvestigationCard({ investigation: inv, expanded, onToggle, onCiteEvidence }: Props) {
+  const [selectedRunbookId, setSelectedRunbookId] = useState<string | null>(null);
+
   return (
     <li className="rounded border border-slate-800 bg-slate-950">
       <button
@@ -49,15 +58,32 @@ export function InvestigationCard({ investigation: inv, expanded, onToggle, onCi
         <span className="text-xs text-slate-400">duration: {(inv.duration_ms / 1000).toFixed(1)}s</span>
         <span className="ml-auto text-xs text-slate-500">{expanded ? '▾' : '▸'}</span>
       </button>
-      {expanded && <InvestigationBody inv={inv} onCiteEvidence={onCiteEvidence} />}
+      {expanded && (
+        <InvestigationBody
+          inv={inv}
+          selectedRunbookId={selectedRunbookId}
+          onSelectRunbook={setSelectedRunbookId}
+          onCiteEvidence={onCiteEvidence}
+        />
+      )}
     </li>
   );
 }
 
-function InvestigationBody({
-  inv,
-  onCiteEvidence,
-}: Pick<Props, 'onCiteEvidence'> & { inv: Investigation }) {
+interface BodyProps {
+  inv: Investigation;
+  selectedRunbookId: string | null;
+  onSelectRunbook: (id: string | null) => void;
+  onCiteEvidence: (anchorId: string) => void;
+}
+
+function InvestigationBody({ inv, selectedRunbookId, onSelectRunbook, onCiteEvidence }: BodyProps) {
+  const knownEvidence = new Set((inv.evidence_snapshot ?? []).map((e) => e.id));
+  const knownRunbooks = new Map((inv.runbook_snapshot ?? []).map((r) => [r.runbook_id, r]));
+  const selectedRunbook: RunbookReference | undefined = selectedRunbookId
+    ? knownRunbooks.get(selectedRunbookId)
+    : undefined;
+
   return (
     <div className="space-y-3 border-t border-slate-800 px-3 py-3">
       <p className="text-xs text-slate-400">
@@ -96,6 +122,10 @@ function InvestigationBody({
         <CompletedReport
           investigationId={inv.id}
           rca={inv.result}
+          knownEvidence={knownEvidence}
+          knownRunbooks={knownRunbooks}
+          selectedRunbookId={selectedRunbookId}
+          onSelectRunbook={onSelectRunbook}
           onCiteEvidence={onCiteEvidence}
         />
       ) : inv.status === 'insufficient_evidence' ? (
@@ -114,19 +144,44 @@ function InvestigationBody({
           Investigation {inv.status}… results will appear here when it completes.
         </p>
       )}
+
+      {selectedRunbookId && (
+        <div id={`runbook-${inv.id}`}>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Referenced runbook
+          </p>
+          <div className="mt-1">
+            {selectedRunbook ? (
+              <RunbookCard runbook={selectedRunbook} />
+            ) : (
+              <MissingReferenceNote kind="Runbook" id={selectedRunbookId} />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function CompletedReport({
-  investigationId,
-  rca,
-  onCiteEvidence,
-}: {
+interface CompletedProps {
   investigationId: string;
   rca: NonNullable<Investigation['result']>;
+  knownEvidence: Set<string>;
+  knownRunbooks: Map<string, RunbookReference>;
+  selectedRunbookId: string | null;
   onCiteEvidence: (anchorId: string) => void;
-}) {
+  onSelectRunbook: (id: string | null) => void;
+}
+
+function CompletedReport({
+  investigationId: invId,
+  rca,
+  knownEvidence,
+  knownRunbooks,
+  selectedRunbookId,
+  onCiteEvidence,
+  onSelectRunbook,
+}: CompletedProps) {
   return (
     <div>
       <p className="text-sm font-medium text-slate-100">{rca.root_cause ?? 'No root cause'}</p>
@@ -150,26 +205,38 @@ function CompletedReport({
             {rca.findings.map((f, idx) => (
               <li key={idx} className="text-sm text-slate-200">
                 {f.description}{' '}
-                {f.evidence_ids.map((eid) => (
-                  <button
-                    key={`${investigationId}-${eid}`}
-                    type="button"
-                    onClick={() => onCiteEvidence(investigationAnchor(investigationId, eid))}
-                    className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-emerald-300 hover:bg-slate-700"
-                    title={`Show cited evidence ${eid} from this investigation`}
-                  >
-                    {eid}
-                  </button>
-                ))}
-                {f.runbook_ids.map((rid) => (
-                  <span
-                    key={rid}
-                    className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-sky-300"
-                    title="Retrieved runbook"
-                  >
-                    {rid}
-                  </span>
-                ))}
+                {f.evidence_ids.map((eid) =>
+                  knownEvidence.has(eid) ? (
+                    <button
+                      key={`${invId}-${eid}`}
+                      type="button"
+                      onClick={() => onCiteEvidence(investigationAnchor(invId, eid))}
+                      className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-emerald-300 hover:bg-slate-700"
+                      title={`Show cited evidence ${eid} from this investigation`}
+                    >
+                      {eid}
+                    </button>
+                  ) : (
+                    <MissingReferenceNote key={`${invId}-${eid}`} kind="Evidence" id={eid} />
+                  ),
+                )}
+                {f.runbook_ids.map((rid) =>
+                  knownRunbooks.has(rid) ? (
+                    <button
+                      key={`${invId}-${rid}`}
+                      type="button"
+                      aria-expanded={selectedRunbookId === rid}
+                      aria-controls={`runbook-${invId}`}
+                      onClick={() => onSelectRunbook(selectedRunbookId === rid ? null : rid)}
+                      className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-sky-300 hover:bg-slate-700"
+                      title={`Show retrieved runbook ${rid} from this investigation`}
+                    >
+                      {rid}
+                    </button>
+                  ) : (
+                    <MissingReferenceNote key={`${invId}-${rid}`} kind="Runbook" id={rid} />
+                  ),
+                )}
               </li>
             ))}
           </ul>
@@ -183,9 +250,6 @@ function CompletedReport({
               <li key={idx} className="rounded border border-amber-900 bg-amber-950/30 p-2 text-sm">
                 <p className="font-medium text-amber-200">
                   {r.title}{' '}
-                  <span className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-300">
-                    risk: {r.risk_level}
-                  </span>{' '}
                   {r.requires_approval ? (
                     <span className="ml-1 rounded bg-amber-900 px-1.5 py-0.5 text-[11px]">
                       APPROVAL REQUIRED
@@ -195,6 +259,9 @@ function CompletedReport({
                       no approval recorded — treat as requiring approval
                     </span>
                   )}
+                  <span className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-300">
+                    risk: {r.risk_level}
+                  </span>
                 </p>
                 <ul className="mt-1 list-disc pl-5 text-slate-300">
                   {r.steps.map((s, i) => (
