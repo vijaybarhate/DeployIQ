@@ -26,6 +26,12 @@ def _to_read(inv: Investigation) -> InvestigationRead:
             evidence_snapshot = []
     except (ValueError, AttributeError):
         evidence_snapshot = []
+    try:
+        runbook_snapshot = json.loads(getattr(inv, "runbook_snapshot", None) or "[]")
+        if not isinstance(runbook_snapshot, list):
+            runbook_snapshot = []
+    except (ValueError, AttributeError):
+        runbook_snapshot = []
     return InvestigationRead(
         id=inv.id,
         incident_id=inv.incident_id,
@@ -35,6 +41,7 @@ def _to_read(inv: Investigation) -> InvestigationRead:
         prompt_version=inv.prompt_version,
         result=result,
         evidence_snapshot=evidence_snapshot,
+        runbook_snapshot=runbook_snapshot,
         prompt_tokens=inv.prompt_tokens,
         completion_tokens=inv.completion_tokens,
         total_tokens=inv.total_tokens,
