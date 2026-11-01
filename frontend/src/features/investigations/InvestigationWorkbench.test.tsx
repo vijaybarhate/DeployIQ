@@ -220,27 +220,150 @@ describe('InvestigationWorkbench pending-created cleanup', () => {
       expect(getCalls).toBeGreaterThan(baseline);
       const afterPost = getCalls;
 
-      for (let i = 0; i < MAX_CREATED_MISSES + 2; i += 1) {
+      // Advance until polling stops on its own (GET count stable across
+      // three consecutive ticks) instead of assuming one GET per tick.
+      let stable = 0;
+      let last = getCalls;
+      for (let i = 0; i < 30 && stable < 3; i += 1) {
         // eslint-disable-next-line no-await-in-loop
         await act(async () => {
           vi.advanceTimersByTime(5000);
         });
+        if (getCalls === last) {
+          stable += 1;
+        } else {
+          stable = 0;
+          last = getCalls;
+        }
       }
-      const afterPolling = getCalls;
-      expect(afterPolling).toBeGreaterThan(afterPost);
+      expect(last).toBeGreaterThan(afterPost);
 
       // Ghost expired by now: late arrival stays silent and polling stopped.
       history.push({ ...ghostPending, status: 'completed' });
+      const beforeManual = getCalls;
       await act(async () => {
         await client.refetchQueries({ queryKey: ['investigations', 'inc-1'] });
         vi.advanceTimersByTime(20000);
       });
-      expect(getCalls).toBe(afterPolling + 1);
+      expect(getCalls).toBe(beforeManual + 1);
       // Flush the query update, then assert synchronously (no findBy:
       // the clock is frozen so waitFor polling would never resolve).
       await act(async () => {});
       expect(screen.getByText('ghost-99')).toBeInTheDocument();
       expect(screen.getByRole('status')).toHaveTextContent('');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('requires exactly ten distinct successful refreshes to expire a ghost', async () => {
+    const hist = makeHist();
+    const ghostPending = makeGhost('pending');
+    const history: Investigation[] = [hist];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/investigations') && init?.method === 'POST') {
+          return { ok: true, status: 201, statusText: 'Created', json: async () => ghostPending } as Response;
+        }
+        if (url.includes('/investigations')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => history } as Response;
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const user = userEvent.setup();
+    renderWorkbench(client);
+    await screen.findByText('hist-000');
+    await user.click(screen.getByRole('button', { name: 'Run AI investigation' }));
+    await waitFor(() => expect(client.getQueryState(['investigations', 'inc-1'])?.dataUpdatedAt).toBeGreaterThan(0));
+
+    // POST-triggered refetch (miss 1) plus 8 manual refreshes = 9 misses.
+    // With double-counting this would already reach the cap of 10.
+    for (let i = 0; i < MAX_CREATED_MISSES - 2; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await client.refetchQueries({ queryKey: ['investigations', 'inc-1'] });
+      });
+      // eslint-disable-next-line no-await-in-loop
+      await waitFor(() =>
+        expect(client.getQueryState(['investigations', 'inc-1'])?.dataUpdatedAt).toBeGreaterThan(0),
+      );
+    }
+
+    // Nine misses are not enough: the late arrival still announces.
+    history.push({ ...ghostPending, status: 'running' });
+    await client.refetchQueries({ queryKey: ['investigations', 'inc-1'] });
+    await waitFor(() => expect(screen.getByRole('status')).not.toHaveTextContent(''));
+    expect(screen.getByRole('status').textContent).toMatch(/ghost-99.*started/);
+  });
+
+  it('starts polling even when the immediate post-trigger refresh fails', async () => {
+    const hist = makeHist();
+    const ghostPending = makeGhost('pending');
+    const history: Investigation[] = [hist];
+    let getCalls = 0;
+    let shouldFail = false;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/investigations') && init?.method === 'POST') {
+          return { ok: true, status: 201, statusText: 'Created', json: async () => ghostPending } as Response;
+        }
+        if (url.includes('/investigations')) {
+          getCalls += 1;
+          if (shouldFail) {
+            return { ok: false, status: 500, statusText: 'Server Error', json: async () => ({ detail: 'boom' }) } as Response;
+          }
+          return { ok: true, status: 200, statusText: 'OK', json: async () => history } as Response;
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWorkbench(client);
+    await screen.findByText('hist-000');
+    const baseline = getCalls;
+
+    vi.useFakeTimers();
+    try {
+      shouldFail = true;
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Run AI investigation' }));
+      });
+      // POST succeeded and exactly one (failed) refresh ran.
+      expect(getCalls).toBe(baseline + 1);
+      shouldFail = false;
+
+      // Only the workbench interval can drive refreshes from here.
+      // Nine successful ticks = nine misses: the ghost must still be pending.
+      for (let i = 0; i < MAX_CREATED_MISSES - 1; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await act(async () => {
+          vi.advanceTimersByTime(5000);
+        });
+      }
+      expect(getCalls).toBeGreaterThan(baseline + 1);
+
+      // The failed refresh consumed no miss: arrival still announces.
+      history.push({ ...ghostPending, status: 'running' });
+      await act(async () => {
+        await client.refetchQueries({ queryKey: ['investigations', 'inc-1'] });
+        // Flush notification timers (under fake timers, query updates only
+        // propagate when the clock advances); stays within one poll period
+        // so the interval itself cannot fire here.
+        vi.advanceTimersByTime(1000);
+      });
+      await act(async () => {});
+      expect(screen.getByText('ghost-99')).toBeInTheDocument();
+      expect(screen.getByRole('status').textContent).toMatch(/ghost-99.*started/);
     } finally {
       vi.useRealTimers();
     }

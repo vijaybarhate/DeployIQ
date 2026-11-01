@@ -51,6 +51,9 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
   // same data reference when a refetch returns structurally identical data,
   // but dataUpdatedAt bumps on every SUCCESSFUL refresh. Failed requests do
   // not bump it and isSuccess is false, so they are never counted as misses.
+  // The pending count uses a functional update and is NOT a dependency:
+  // otherwise the state update itself would re-run this effect and count the
+  // same refresh twice, expiring ghosts early.
   // eslint-disable-next-line react/set-state-in-effect -- intentional: announce polled transitions
   useEffect(() => {
     if (!history.isSuccess) return;
@@ -68,9 +71,9 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
       new Set(announced.map((a) => a.id)),
     );
     const pending = createdIds.current.size;
-    if (pending !== pendingCount) setPendingCount(pending);
+    setPendingCount((current) => (current === pending ? current : pending));
     if (messages.length > 0) setAnnouncement(messages.join(' '));
-  }, [history.data, history.dataUpdatedAt, history.isSuccess, pendingCount]);
+  }, [history.data, history.dataUpdatedAt, history.isSuccess]);
 
   // Bounded self-polling: while POST-created IDs are still pending, keep
   // scheduling successful refreshes even if the parent page stopped polling
@@ -91,8 +94,13 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
     try {
       const created = await triggerInvestigation(incidentId);
       // Mark user-created attempts so the announcer treats them as new,
-      // not as pre-existing history.
-      if (created && typeof created.id === 'string') createdIds.current.add(created.id);
+      // not as pre-existing history. Sync the pending count immediately —
+      // before the refresh below — so self-polling starts even when that
+      // first refresh fails.
+      if (created && typeof created.id === 'string') {
+        createdIds.current.add(created.id);
+        setPendingCount(createdIds.current.size);
+      }
       await history.refetch();
       onInvestigated();
     } catch (err) {
