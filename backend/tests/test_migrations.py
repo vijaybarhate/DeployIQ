@@ -33,7 +33,7 @@ def test_migrations_upgrade_head(tmp_path, monkeypatch):
     indexes = {ix["name"] for ix in inspector.get_indexes("investigations")}
     assert "uq_investigation_active_per_incident" in indexes
     columns = {c["name"] for c in inspector.get_columns("investigations")}
-    assert {"evidence_snapshot", "started_at", "error_message"} <= columns
+    assert {"evidence_snapshot", "runbook_snapshot", "started_at", "error_message"} <= columns
 
     # Downgrade back down removes the investigation artefacts.
     try:

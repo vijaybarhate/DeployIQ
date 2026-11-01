@@ -46,6 +46,15 @@ const investigation: Investigation = {
     limitations: '',
   },
   evidence_snapshot: [{ id: 'E-001', kind: 'exception', summary: 'ZeroDivisionError', detail: '' }],
+  runbook_snapshot: [
+    {
+      runbook_id: 'RB-007',
+      title: 'HTTP 500',
+      relevance_score: 9.0,
+      matched_sections: ['Symptoms'],
+      source_urls: ['https://docs.docker.com/x'],
+    },
+  ],
   prompt_tokens: 1,
   completion_tokens: 1,
   total_tokens: 2,

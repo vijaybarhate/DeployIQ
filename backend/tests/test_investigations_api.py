@@ -151,6 +151,11 @@ def test_trigger_and_history():
     assert snapshot[0]["id"] == "E-001"
     assert snapshot[0]["kind"] == "exception"
     assert "ZeroDivisionError" in snapshot[0]["summary"]
+    runbooks = body["runbook_snapshot"]
+    assert isinstance(runbooks, list) and len(runbooks) == 1
+    assert runbooks[0]["runbook_id"] == "RB-007"
+    assert runbooks[0]["title"] == "HTTP 500"
+    assert runbooks[0]["source_urls"] == ["https://docs.docker.com/x"]
 
     r = client.get(f"/api/v1/incidents/{incident_id}/investigations")
     assert r.status_code == 200
@@ -160,6 +165,29 @@ def test_trigger_and_history():
 def test_unknown_incident_404():
     r = client.post(f"/api/v1/incidents/{uuid.uuid4()}/investigations")
     assert r.status_code == 404
+
+
+def test_old_records_default_to_empty_snapshots():
+    """Pre-snapshot rows (NULL-free via server defaults) serialize as []."""
+    incident_id = _seed_incident()
+    session = TestingSession()
+    legacy = Investigation(
+        incident_id=incident_id,
+        status="completed",
+        requested_model="m",
+        prompt_version="rca-v1",
+        result_json="{}",
+    )
+    session.add(legacy)
+    session.commit()
+    legacy_id = str(legacy.id)
+    session.close()
+    r = client.get(f"/api/v1/incidents/{incident_id}/investigations")
+    assert r.status_code == 200
+    bodies = [b for b in r.json() if b["id"] == legacy_id]
+    assert len(bodies) == 1
+    assert bodies[0]["evidence_snapshot"] == []
+    assert bodies[0]["runbook_snapshot"] == []
 
 
 def test_simultaneous_duplicate_rejected_with_409():
