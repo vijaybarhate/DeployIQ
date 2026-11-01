@@ -337,6 +337,11 @@ def test_provider_failure_yields_failed_record():
     assert record.error_message
     assert record.started_at is not None
     assert record.actual_model == ""
+    import json as _json
+
+    snapshot = _json.loads(record.evidence_snapshot or "[]")
+    assert isinstance(snapshot, list) and len(snapshot) == 1
+    assert snapshot[0]["id"] == "E-001"  # evidence preserved despite LLM failure
     session.close()
 
     r = client.post(f"/api/v1/incidents/{incident_id}/investigations")
