@@ -13,7 +13,7 @@ architecture reviews.
 - Backend: Python 3.12, FastAPI, Pydantic, SQLAlchemy
 - AI: LangGraph, OpenRouter (free-model routing, structured JSON output)
 - RAG: DevOps runbooks (ranked retrieval; pgvector where feasible)
-- Frontend: React + TypeScript + Vite + Tailwind (not started)
+- Frontend: React 19 + TypeScript + Vite + Tailwind CSS v4 (in development on feature branches)
 - Reports: ReportLab PDF
 - Infra: Docker Desktop, Docker Compose, GitHub Actions
 
@@ -35,7 +35,8 @@ architecture reviews.
 5. Start the watcher from `backend/` (same requirement — it exits instead of
    running against an unmigrated database):
    `$env:MONITORED_PROJECTS="deployiq-demo"; .venv/Scripts/python -m app.collector.watch`
-6. Frontend setup instructions will be added as that milestone lands.
+6. Frontend (dev server with backend proxy): `cd frontend && npm install && npm run dev`.
+   See `frontend/README.md` for typecheck, lint, test and build commands.
 
 ## Security
 
