@@ -146,6 +146,11 @@ def test_trigger_and_history():
     assert body["actual_model"] == "stub/model:free"
     assert body["total_tokens"] == 15
     assert body["prompt_version"] == "rca-v1"
+    snapshot = body["evidence_snapshot"]
+    assert isinstance(snapshot, list) and len(snapshot) == 1
+    assert snapshot[0]["id"] == "E-001"
+    assert snapshot[0]["kind"] == "exception"
+    assert "ZeroDivisionError" in snapshot[0]["summary"]
 
     r = client.get(f"/api/v1/incidents/{incident_id}/investigations")
     assert r.status_code == 200
@@ -332,6 +337,11 @@ def test_provider_failure_yields_failed_record():
     assert record.error_message
     assert record.started_at is not None
     assert record.actual_model == ""
+    import json as _json
+
+    snapshot = _json.loads(record.evidence_snapshot or "[]")
+    assert isinstance(snapshot, list) and len(snapshot) == 1
+    assert snapshot[0]["id"] == "E-001"  # evidence preserved despite LLM failure
     session.close()
 
     r = client.post(f"/api/v1/incidents/{incident_id}/investigations")

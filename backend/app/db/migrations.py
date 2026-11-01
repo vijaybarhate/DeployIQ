@@ -19,7 +19,9 @@ log = get_logger(__name__)
 
 def migration_head() -> str:
     """Current Alembic head from the configured migration scripts (not hardcoded)."""
-    cfg = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    backend_dir = Path(__file__).resolve().parents[2]
+    cfg = Config(str(backend_dir / "alembic.ini"))
+    cfg.set_main_option("script_location", str(backend_dir / "migrations"))
     heads = ScriptDirectory.from_config(cfg).get_heads()
     return heads[0] if len(heads) == 1 else ""
 

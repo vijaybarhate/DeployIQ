@@ -31,6 +31,7 @@ class Investigation(Base):
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_code: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     error_message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    evidence_snapshot: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=lambda: datetime.now(UTC)
     )
