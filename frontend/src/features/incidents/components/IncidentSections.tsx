@@ -2,7 +2,7 @@ import type { Incident } from '../../../types/api';
 
 export function IncidentHeader({ incident }: { incident: Incident }) {
   return (
-    <div>
+    <div data-tour="details-header">
       <h1 className="text-xl font-semibold">{incident.title}</h1>
       <p className="mt-1 text-sm text-slate-400">
         {incident.project_id} · {incident.source} · {incident.status} · severity{' '}
@@ -19,7 +19,7 @@ export function IncidentHeader({ incident }: { incident: Incident }) {
 
 export function IncidentEvidence({ incident }: { incident: Incident }) {
   return (
-    <section aria-label="Incident evidence" className="rounded-md border border-slate-800 bg-slate-900 p-4">
+    <section aria-label="Incident evidence" data-tour="details-evidence" className="rounded-md border border-slate-800 bg-slate-900 p-4">
       <h2 className="text-sm font-medium text-slate-200">Incident evidence</h2>
       <p className="mt-1 text-xs text-slate-500">
         Original evidence from incident collection (no investigation IDs attached).
@@ -43,7 +43,7 @@ export function IncidentEvidence({ incident }: { incident: Incident }) {
 
 export function RawLogs({ logs }: { logs: string }) {
   return (
-    <section aria-label="Raw logs" className="rounded-md border border-slate-800 bg-slate-900 p-4">
+    <section aria-label="Raw logs" data-tour="details-logs" className="rounded-md border border-slate-800 bg-slate-900 p-4">
       <h2 className="text-sm font-medium text-slate-200">Raw logs</h2>
       {logs ? (
         <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-950 p-3 font-mono text-xs text-slate-300">
