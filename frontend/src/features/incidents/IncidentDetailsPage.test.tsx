@@ -196,7 +196,7 @@ describe('Investigation history with multiple attempts', () => {
     renderPage();
     // Newest (inv-1) expanded: findings visible without interaction.
     expect(await screen.findByText('boom')).toBeInTheDocument();
-    expect(screen.getAllByText('completed').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(1);
   });
 
   it('toggles cards independently without affecting each other', async () => {

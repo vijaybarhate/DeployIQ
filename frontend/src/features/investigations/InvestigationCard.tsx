@@ -17,10 +17,23 @@ const STATUS_STYLES: Record<Investigation['status'], string> = {
   running: 'bg-blue-900 text-blue-200',
 };
 
+const STATUS_LABELS: Record<Investigation['status'], string> = {
+  pending: 'Queued',
+  running: 'Running',
+  completed: 'Completed',
+  insufficient_evidence: 'Insufficient evidence',
+  failed: 'Failed',
+  validation_failed: 'Validation failed',
+};
+
 export function InvestigationStatusBadge({ status }: { status: Investigation['status'] }) {
   return (
-    <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}>
-      {status}
+    <span
+      role="status"
+      aria-label={`Investigation status: ${STATUS_LABELS[status]}`}
+      className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
+    >
+      {STATUS_LABELS[status]}
     </span>
   );
 }
@@ -84,11 +97,12 @@ export function InvestigationCard({ investigation: inv, expanded, nowMs, onToggl
   );
 }
 
+import { elapsedSeconds, formatElapsed, parseInstant } from '../../lib/time';
+
 function ElapsedSince({ startIso, nowMs }: { startIso: string; nowMs: number }) {
-  const from = Date.parse(startIso);
-  if (Number.isNaN(from)) return null;
-  const secs = Math.max(0, Math.floor((nowMs - from) / 1000));
-  const text = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  const secs = elapsedSeconds(parseInstant(startIso), nowMs);
+  if (secs === null) return null;
+  const text = formatElapsed(secs);
   return <span aria-label={`elapsed ${text}`}>· {text}</span>;
 }
 

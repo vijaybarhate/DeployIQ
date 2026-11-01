@@ -4,68 +4,41 @@ import { ApiError } from '../../lib/api/client';
 import { triggerInvestigation, useInvestigations, isInvestigationActive } from '../../hooks/queries';
 import { useNow } from '../../hooks/useNow';
 import type { Investigation } from '../../types/api';
+import { computeAnnouncements } from './announcements';
 import { InvestigationCard } from './InvestigationCard';
 
 interface Props {
   incidentId: string;
   onInvestigated: () => void;
   onCiteEvidence: (anchorId: string) => void;
-}
-
-const STATUS_ANNOUNCEMENTS: Record<Investigation['status'], string | null> = {
-  pending: 'Investigation queued.',
-  running: 'Investigation started.',
-  completed: 'Investigation completed.',
-  insufficient_evidence: 'Investigation completed with insufficient evidence.',
-  failed: 'Investigation failed.',
-  validation_failed: 'Investigation failed validation.',
-};
-
-function announceFor(status: Investigation['status']): string | null {
-  return STATUS_ANNOUNCEMENTS[status] ?? null;
+  /** Test seam: fixed clock value instead of the ticking shared clock. */
+  nowMs?: number;
 }
 
 /** Trigger + collapsible per-attempt history. Latest attempt expanded by default. */
-export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvidence }: Props) {
+export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvidence, nowMs }: Props) {
   const history = useInvestigations(incidentId);
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [announcement, setAnnouncement] = useState('');
   const seenStatuses = useRef(new Map<string, Investigation['status']>());
+  const createdIds = useRef(new Set<string>());
 
   const hasActive = (history.data ?? []).some((i) => isInvestigationActive(i.status));
-  // One shared clock for elapsed-time display; ticks only while something is active.
-  const now = useNow(hasActive);
+  // One shared clock for elapsed-time display; ticks only while active.
+  // nowMs override exists for deterministic tests.
+  const tickNow = useNow(hasActive);
+  const now = nowMs ?? tickNow;
 
-  // Announce genuine transitions only — never on initial hydration, never repeats.
   // Announce genuine transitions only — never on initial hydration, never
-  // repeats for unchanged statuses.
+  // repeats for unchanged statuses. Newly POST-created investigations announce
+  // immediately; historical records stay silent.
+  // eslint-disable-next-line react/set-state-in-effect -- intentional: announce polled transitions
   useEffect(() => {
     const items = history.data;
     if (!items) return;
-    const prev = seenStatuses.current;
-    const messages: string[] = [];
-    for (const inv of items) {
-      const last = prev.get(inv.id);
-      if (last === undefined) {
-        // First sight of this investigation: record silently (no hydration spam).
-        prev.set(inv.id, inv.status);
-        continue;
-      }
-      if (last !== inv.status) {
-        prev.set(inv.id, inv.status);
-        const text = announceFor(inv.status);
-        if (text) messages.push(text);
-      }
-    }
-    // Drop IDs that no longer exist so the map cannot grow unboundedly.
-    for (const id of [...prev.keys()]) {
-      if (!items.some((i) => i.id === id)) prev.delete(id);
-    }
-    // oxlint flags setState-in-effect; assigning then announcing in the same
-    // effect is the correct pattern for derived announcements from polling.
-    // eslint-disable-next-line react/set-state-in-effect
+    const { messages } = computeAnnouncements(seenStatuses.current, items, createdIds.current);
     if (messages.length > 0) setAnnouncement(messages.join(' '));
   }, [history.data]);
 
@@ -73,7 +46,10 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
     setTriggerError(null);
     setTriggering(true);
     try {
-      await triggerInvestigation(incidentId);
+      const created = await triggerInvestigation(incidentId);
+      // Mark user-created attempts so the announcer treats them as new,
+      // not as pre-existing history.
+      if (created && typeof created.id === 'string') createdIds.current.add(created.id);
       await history.refetch();
       onInvestigated();
     } catch (err) {
