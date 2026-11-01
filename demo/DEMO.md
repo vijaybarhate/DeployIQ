@@ -20,6 +20,8 @@ docker compose (demo/crashme)
 Prerequisites: Docker Desktop running, root `.env` present with
 `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (a `:free` model) and optional
 `OPENROUTER_FALLBACK_MODELS` (all `:free`). Never commit `.env`.
+`DATABASE_URL` defaults to `sqlite:///./deployiq.db` when the app is launched
+from `backend/` (do not leave it blank — empty values override the default).
 `MONITORED_PROJECTS` must be set in **each** terminal (it is read from the
 environment; root `.env` is also loaded as fallback).
 
