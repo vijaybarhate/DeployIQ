@@ -1,32 +1,40 @@
-# React + TypeScript + Vite
+# DeployIQ Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript + Vite workbench for the DeployIQ AI DevOps Copilot.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Development
+
+The dev server proxies `/api/*` to the FastAPI backend on `127.0.0.1:8000`
+(see `vite.config.ts`). Start the backend first (see the root README), then:
+
+```bash
+npm run dev
+```
+
+No API keys or secrets belong in this app. `VITE_API_URL` (see `.env.example`)
+optionally overrides the same-origin `/api/v1` base for non-proxied setups.
+
+## Checks
+
+```bash
+npm run typecheck   # TypeScript
+npm run lint        # oxlint
+npm test -- --run   # Vitest unit/component tests
+npm run build       # production build
+npm run test:e2e    # Playwright smoke tests (starts dev server automatically)
+```
+
+## Structure
+
+- `src/app/` — App shell, router, TanStack Query provider
+- `src/features/` — Overview, Incident Center, Incident Details + Workbench
+- `src/lib/api/` — typed REST client (`client.ts`, `incidents.ts`, `investigations.ts`)
+- `src/types/api.ts` — backend API mirror (evidence snapshots included)
+- `src/hooks/` — TanStack Query hooks with status-aware polling
+- `e2e/` — Playwright smoke tests (honest backend-absent states, no mock data)

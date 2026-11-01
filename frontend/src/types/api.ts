@@ -10,11 +10,14 @@ export type InvestigationStatus =
   | 'failed'
   | 'validation_failed'
 
-export interface EvidenceRef {
-  id: string
+export interface IncidentEvidenceItem {
   kind: string
   summary: string
-  detail: string
+  detail: string;
+}
+
+export interface EvidenceRef extends IncidentEvidenceItem {
+  id: string;
 }
 
 export interface Incident {
@@ -26,7 +29,7 @@ export interface Incident {
   severity: string | null
   error_signature: string
   raw_logs: string
-  evidence: EvidenceRef[]
+  evidence: IncidentEvidenceItem[]
   first_seen: string
   last_seen: string
   observation_count: number

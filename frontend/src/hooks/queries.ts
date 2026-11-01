@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { getHealth, getIncident, listIncidents } from '../lib/api/incidents';
 import { listInvestigations, triggerInvestigation } from '../lib/api/investigations';
+import type { Investigation } from '../types/api';
 
 export function useIncidents() {
   return useQuery({
@@ -28,13 +29,16 @@ export function useHealth() {
   });
 }
 
-export function useInvestigations(incidentId: string | undefined, active: boolean) {
+export function useInvestigations(incidentId: string | undefined) {
   return useQuery({
     queryKey: ['investigations', incidentId],
     queryFn: () => listInvestigations(incidentId ?? ''),
     enabled: Boolean(incidentId),
-    refetchInterval: active ? 5_000 : false,
   });
+}
+
+export function isInvestigationActive(status: Investigation['status']): boolean {
+  return status === 'pending' || status === 'running';
 }
 
 export { triggerInvestigation };
