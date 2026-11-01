@@ -84,9 +84,10 @@ Health endpoints (do not confuse them):
 
 ## 5. Repeatable 5–7 minute demo script
 
-1. (0:00) `docker compose up -d`, show crashme healthy + backend
-   `/api/v1/healthz`.
-2. (1:00) `curl :18000/boom` -> 500; show traceback via `docker logs --tail`.
+1. (0:00) `docker compose -f demo/docker-compose.yml up -d --build`, show
+   crashme healthy + backend `/api/v1/healthz`.
+2. (1:00) `curl.exe -i http://127.0.0.1:18000/boom` -> 500; show traceback
+   via `docker compose -f demo/docker-compose.yml logs --tail 50 crashme`.
 3. (2:00) Dashboard Incident Center: new ZeroDivisionError incident, evidence,
    observation count grows on repeat booms (dedup, stays ONE incident).
 4. (3:00) Open incident -> Run AI investigation -> watch Queued -> Running
@@ -94,15 +95,25 @@ Health endpoints (do not confuse them):
 5. (4:30) Report: root cause, finding chips E-001/RB-007 -> click citation
    (focus jumps, panel opens), approval-required recommendation.
 6. (5:30) Failure path: stop backend (or bad key) -> error + Retry; restart.
-7. (6:30) `docker compose restart crashme` (clean reset). Q&A.
+7. (6:30) `docker compose -f demo/docker-compose.yml restart crashme`
+   (container-only reset; application history is untouched, see section 6).
+   Q&A.
 
 ## 6. Reset semantics (read before demoing)
 
 - CrashMe reset (container only):
   `docker compose -f demo/docker-compose.yml restart crashme`.
-- Full application-state reset (incidents/investigations): the app database
-  lives at `backend/deployiq.db`, which is OUTSIDE the Compose project, so
-  `docker compose down -v` does NOT clear it. Back it up first, then delete
-  it and re-run `alembic upgrade head` from `backend/` for a truly clean
-  Incident Center. Do NOT expect a clean dashboard from restarting only
-  CrashMe.
+- Full application-state reset (incidents/investigations): with the DEFAULT
+  SQLite configuration and the app run from `backend/`, the database lives at
+  `backend/deployiq.db`, which is OUTSIDE the Compose project, so
+  `docker compose down -v` does NOT clear it. Before touching the database:
+  1. Stop the API and watcher processes first (never delete a SQLite file
+     the application is using).
+  2. Check the configured `DATABASE_URL` (environment or root `.env`) — only
+     proceed below if it is unset or points at the default
+     `sqlite:///./deployiq.db`.
+  3. Back up `backend/deployiq.db`, delete it, then re-run
+     `alembic upgrade head` from `backend/` for a truly clean Incident Center.
+  An alternate SQLite path or a PostgreSQL `DATABASE_URL` needs its own
+  reset procedure (do NOT apply the file-delete steps to it). Do NOT expect a
+  clean dashboard from restarting only CrashMe.
