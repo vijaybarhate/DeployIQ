@@ -1,4 +1,5 @@
 import type { Investigation } from '../../types/api';
+import { SeverityBadge } from '../../components/ui/Badges';
 
 function investigationAnchor(investigationId: string, evidenceId: string): string {
   return `evidence-${investigationId}-${evidenceId}`;
@@ -129,12 +130,15 @@ function CompletedReport({
     <div>
       <p className="text-sm font-medium text-slate-100">{rca.root_cause ?? 'No root cause'}</p>
       <p className="mt-1 text-sm text-slate-300">{rca.explanation}</p>
-      <p className="mt-1 text-xs text-slate-400">
-        AI-estimated confidence:{' '}
-        {rca.confidence_estimate === null
-          ? 'not enough evidence to estimate'
-          : `${Math.round(rca.confidence_estimate * 100)}% — not a calibrated probability`}
-      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+        <SeverityBadge value={rca.severity_assessment} />
+        <span className="text-slate-400">
+          AI-estimated confidence:{' '}
+          {rca.confidence_estimate === null
+            ? 'not enough evidence to estimate'
+            : `${Math.round(rca.confidence_estimate * 100)}% — not a calibrated probability`}
+        </span>
+      </div>
       {rca.confidence_rationale && (
         <p className="mt-1 text-xs text-slate-400">Basis: {rca.confidence_rationale}</p>
       )}
@@ -178,9 +182,18 @@ function CompletedReport({
               <li key={idx} className="rounded border border-amber-900 bg-amber-950/30 p-2 text-sm">
                 <p className="font-medium text-amber-200">
                   {r.title}{' '}
-                  <span className="ml-1 rounded bg-amber-900 px-1.5 py-0.5 text-[11px]">
-                    APPROVAL REQUIRED
-                  </span>
+                  <span className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-300">
+                    risk: {r.risk_level}
+                  </span>{' '}
+                  {r.requires_approval ? (
+                    <span className="ml-1 rounded bg-amber-900 px-1.5 py-0.5 text-[11px]">
+                      APPROVAL REQUIRED
+                    </span>
+                  ) : (
+                    <span className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-300">
+                      no approval recorded — treat as requiring approval
+                    </span>
+                  )}
                 </p>
                 <ul className="mt-1 list-disc pl-5 text-slate-300">
                   {r.steps.map((s, i) => (

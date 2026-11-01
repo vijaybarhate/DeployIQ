@@ -126,3 +126,104 @@ describe('IncidentDetailsPage citation navigation', () => {
     expect(await screen.findByText(/not a calibrated probability/)).toBeInTheDocument();
   });
 });
+
+const olderRunning: Investigation = {
+  ...investigation,
+  id: 'inv-0',
+  status: 'running',
+  result: null,
+  created_at: '2026-01-01T00:00:01',
+  completed_at: null,
+};
+
+function mockFetchTwo() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.endsWith('/incidents/inc-1')
+        ? incident
+        : url.includes('/investigations')
+          ? [investigation, olderRunning]
+          : [];
+      return { ok: true, status: 200, statusText: 'OK', json: async () => body } as Response;
+    }),
+  );
+}
+
+describe('Investigation history with multiple attempts', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    mockFetchTwo();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('expands the newest attempt and collapses older ones', async () => {
+    renderPage();
+    // Newest (inv-1) expanded: findings visible without interaction.
+    expect(await screen.findByText('boom')).toBeInTheDocument();
+    // Older (inv-0) collapsed: its card header shows, body content hidden.
+    expect(screen.getByText('running')).toBeInTheDocument();
+  });
+
+  it('toggles cards independently and scopes citations per investigation', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('boom');
+    // Both attempts reference E-001; each citation button is scoped.
+    const buttons = await screen.findAllByRole('button', { name: 'E-001' });
+    expect(buttons).toHaveLength(1); // only the expanded card exposes citations
+    await user.click(buttons[0]);
+    expect(document.getElementById('evidence-inv-1-E-001')).not.toBeNull();
+  });
+});
+
+describe('Investigation history states', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('distinguishes an empty history from a fetch error', async () => {
+    mockFetchEmpty();
+    renderPage();
+    expect(await screen.findByText(/No investigations yet/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows a distinct error state when history fails to load', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes('/investigations')) {
+          return {
+            ok: false,
+            status: 500,
+            statusText: 'Server Error',
+            json: async () => ({ detail: 'boom' }),
+          } as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => incident,
+        } as Response;
+      }),
+    );
+    renderPage();
+    expect(await screen.findByText(/Could not load investigation history/)).toBeInTheDocument();
+    expect(screen.queryByText(/No investigations yet/)).toBeNull();
+  });
+});
+
+function mockFetchEmpty() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.endsWith('/incidents/inc-1') ? incident : [];
+      return { ok: true, status: 200, statusText: 'OK', json: async () => body } as Response;
+    }),
+  );
+}
