@@ -25,21 +25,23 @@ function evidenceAnchor(investigationId: string, evidenceId: string): string {
 export function IncidentDetailsPage() {
   const { incidentId } = useParams();
   const incident = useIncident(incidentId);
-  const investigations = useInvestigations(incidentId);
+  const historyQuery = useInvestigations(incidentId);
+  const { data: history, refetch: refetchHistory } = historyQuery;
   const [triggerError, setTriggerError] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
 
   // Status-aware polling: refresh while any investigation is active so the UI
   // follows pending/running -> terminal transitions without manual refresh.
-  const hasActive = (investigations.data ?? []).some((i) => isInvestigationActive(i.status));
+  // Depends on the stable refetch function, not the whole query object.
+  const hasActive = (history ?? []).some((i) => isInvestigationActive(i.status));
   useEffect(() => {
     if (!hasActive) return undefined;
     const timer = setInterval(() => {
-      void investigations.refetch();
+      void refetchHistory();
     }, 5000);
     return () => clearInterval(timer);
-  }, [hasActive, investigations]);
+  }, [hasActive, refetchHistory]);
 
   async function onInvestigate() {
     if (!incidentId) return;
@@ -47,12 +49,12 @@ export function IncidentDetailsPage() {
     setTriggering(true);
     try {
       await triggerInvestigation(incidentId);
-      await investigations.refetch();
+      await refetchHistory();
       await incident.refetch();
     } catch (err) {
       // The request may have timed out after the backend accepted it:
       // refresh history first so a created investigation is not hidden.
-      await investigations.refetch().catch(() => undefined);
+      await refetchHistory().catch(() => undefined);
       if (err instanceof ApiError) {
         if (err.status === 409) {
           setTriggerError('An investigation is already active for this incident. History refreshed.');
@@ -146,23 +148,23 @@ export function IncidentDetailsPage() {
           <h3 className="text-xs font-medium uppercase tracking-wide text-slate-400">
             Investigation history
           </h3>
-          {investigations.isLoading ? (
+          {historyQuery.isLoading ? (
             <p className="mt-2 text-sm text-slate-400">Loading history…</p>
-          ) : investigations.isError ? (
+          ) : historyQuery.isError ? (
             <p role="alert" className="mt-2 text-sm text-red-300">
               Could not load investigation history:{' '}
-              {investigations.error instanceof Error ? investigations.error.message : 'unknown error'}{' '}
-              <button type="button" onClick={() => investigations.refetch()} className="underline">
+              {historyQuery.error instanceof Error ? historyQuery.error.message : 'unknown error'}{' '}
+              <button type="button" onClick={() => historyQuery.refetch()} className="underline">
                 Retry
               </button>
             </p>
-          ) : !investigations.data || investigations.data.length === 0 ? (
+          ) : !history || history.length === 0 ? (
             <p className="mt-2 text-sm text-slate-400">
               No investigations yet. Trigger one to generate an evidence-grounded RCA report.
             </p>
           ) : (
             <ul className="mt-2 space-y-3">
-              {investigations.data.map((inv) => (
+              {history.map((inv) => (
                 <li key={inv.id} className="rounded border border-slate-800 bg-slate-950 p-3">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <StatusBadge status={inv.status} />
