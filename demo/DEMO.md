@@ -15,21 +15,64 @@ docker compose (demo/crashme)
      focus restore, keyboard + Escape, retry states)
 ```
 
-## 2. Verified live run (2026-11-01, Windows + Docker 29.8.2)
+## 2. Exact reproducible setup (Windows PowerShell)
+
+Prerequisites: Docker Desktop running, root `.env` present with
+`OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (a `:free` model) and optional
+`OPENROUTER_FALLBACK_MODELS` (all `:free`). Never commit `.env`.
+`MONITORED_PROJECTS` must be set in **each** terminal (it is read from the
+environment; root `.env` is also loaded as fallback).
+
+Backend migration, from `backend/`:
+
+```powershell
+$env:MONITORED_PROJECTS = "deployiq-demo"
+.\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+API, in a separate `backend/` terminal:
+
+```powershell
+$env:MONITORED_PROJECTS = "deployiq-demo"
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
+```
+
+Watcher, in another `backend/` terminal:
+
+```powershell
+$env:MONITORED_PROJECTS = "deployiq-demo"
+.\.venv\Scripts\python.exe -m app.collector.watch
+```
+
+Frontend, from `frontend/`:
+
+```powershell
+npm run dev
+```
+
+Health endpoints (do not confuse them):
+
+- Backend API: `http://127.0.0.1:8000/api/v1/healthz` (also reports Docker
+  connectivity).
+- CrashMe container: `http://localhost:18000/health` (200 unless its
+  `/tmp/unhealthy` flag exists).
+- Dashboard: `http://localhost:5173` (Vite dev server, proxies `/api`).
+
+## 3. Verified live run (2026-11-01, Windows + Docker 29.8.2)
 
 | Step | Command / action | Result |
 |---|---|---|
 | Compose up | `docker compose -f demo/docker-compose.yml up -d --build` | `deployiq-demo-crashme-1` Up, healthy |
 | Migrate | `alembic upgrade head` (from `backend/`) | clean |
-| API | `uvicorn app.main:app --port 8000` | `/healthz` ok, docker connected |
+| API | uvicorn on :8000 | `/api/v1/healthz` ok, docker connected |
 | Watcher | `python -m app.collector.watch` | streaming |
 | Crash | `GET :18000/boom` | HTTP 500, traceback in `docker logs` |
-| Incident | `GET /api/v1/incidents` | `1e1c14e0…` ZeroDivisionError, obs=2 (deduped into ONE incident) |
+| Incident | `GET /api/v1/incidents` | one deduplicated ZeroDivisionError incident (obs=2) |
 | Investigate | `POST /api/v1/incidents/{id}/investigations` | completed in ~15s |
-| RCA | investigation `77b45195…` | diagnosed, actual_model `nvidia/nemotron-3.5-super-vl:free`, 2903 tokens, finding E-001 + RB-007, approval-required fix steps, confidence 0.92 |
-| Crash-exit | `GET :18000/die` | container Exited(1); reset via `docker compose restart crashme` |
+| RCA | investigation result | diagnosed, actual_model `nvidia/nemotron-3.5-super-vl:free`, 2903 tokens, finding E-001 + RB-007, approval-required fix steps, confidence 0.92 |
+| Crash-exit | `GET :18000/die` | container Exited(1); reset via compose restart (below) |
 
-## 3. Failure / fallback paths (demonstrated or covered by tests)
+## 4. Failure / fallback paths (demonstrated or covered by tests)
 
 - Provider null/strict-schema output -> plain-JSON retry (max 1), else honest
   `failed`/`validation_failed` with `error_code`, never a fake report.
@@ -39,9 +82,10 @@ docker compose (demo/crashme)
 - Ghost/expired polling cleanup -> bounded misses, interval stops (unit).
 - Backend unreachable -> Incident Center error state (Playwright smoke).
 
-## 4. Repeatable 5–7 minute demo script
+## 5. Repeatable 5–7 minute demo script
 
-1. (0:00) `docker compose up -d`, show crashme healthy + backend `/healthz`.
+1. (0:00) `docker compose up -d`, show crashme healthy + backend
+   `/api/v1/healthz`.
 2. (1:00) `curl :18000/boom` -> 500; show traceback via `docker logs --tail`.
 3. (2:00) Dashboard Incident Center: new ZeroDivisionError incident, evidence,
    observation count grows on repeat booms (dedup, stays ONE incident).
@@ -52,10 +96,13 @@ docker compose (demo/crashme)
 6. (5:30) Failure path: stop backend (or bad key) -> error + Retry; restart.
 7. (6:30) `docker compose restart crashme` (clean reset). Q&A.
 
-## 5. Reset
+## 6. Reset semantics (read before demoing)
 
-```powershell
-docker compose -f demo/docker-compose.yml restart crashme
-# optional full reset: docker compose down -v (also clears nothing app-side;
-# app DB lives in backend/deployiq.db — back it up before wiping)
-```
+- CrashMe reset (container only):
+  `docker compose -f demo/docker-compose.yml restart crashme`.
+- Full application-state reset (incidents/investigations): the app database
+  lives at `backend/deployiq.db`, which is OUTSIDE the Compose project, so
+  `docker compose down -v` does NOT clear it. Back it up first, then delete
+  it and re-run `alembic upgrade head` from `backend/` for a truly clean
+  Incident Center. Do NOT expect a clean dashboard from restarting only
+  CrashMe.
