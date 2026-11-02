@@ -66,7 +66,7 @@ const MODEL_TEXT: Record<string, string> = {
   limited: 'text-amber-300',
   slow: 'text-amber-300',
   down: 'text-red-300',
-  unknown: 'text-slate-500',
+  unknown: 'text-muted',
 };
 
 function engineRowDot(status: string): string {
@@ -382,14 +382,14 @@ export function OpsConsolePage() {
               running ? 'bg-emerald-400' : 'bg-slate-600'
             }`}
           />
-          <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-slate-100">
+          <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink">
             {c.name}
           </span>
-          <span className="flex-none font-mono text-[11px] text-slate-500">
+          <span className="flex-none font-mono text-[11px] text-muted">
             {c.status || 'unknown'}
           </span>
         </span>
-        <span className="mt-0.5 block truncate font-mono text-[11px] text-slate-600">
+        <span className="mt-0.5 block truncate font-mono text-[11px] text-muted">
           {c.health ? `health:${c.health}` : 'health:—'}
           {c.short_id ? ` · ${c.short_id.slice(0, 12)}` : ''}
         </span>
@@ -408,7 +408,7 @@ export function OpsConsolePage() {
           <button
             type="button"
             onClick={() => attach(c.name)}
-            className="flex min-h-[40px] cursor-pointer items-center px-1 text-[13px] text-slate-400 underline-offset-4 transition-colors duration-200 hover:text-slate-100 hover:underline"
+            className="flex min-h-[40px] cursor-pointer items-center px-1 text-[13px] text-muted underline-offset-4 transition-colors duration-200 hover:text-ink hover:underline"
           >
             View logs
           </button>
@@ -425,14 +425,14 @@ export function OpsConsolePage() {
           <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
             Operations console
           </h1>
-          <p className="mt-1 max-w-xl text-sm text-slate-400">
+          <p className="mt-1 max-w-xl text-sm text-muted">
             Docker, evidence, and AI diagnosis in one place. Everything here is read-only
             until you explicitly record an incident.
           </p>
         </div>
         {/* Status cluster */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="flex min-h-[36px] items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900 py-1 pl-2.5 pr-3 font-mono text-xs text-slate-300">
+          <span className="flex min-h-[36px] items-center gap-2 rounded-full border border-hairline bg-panel py-1 pl-2.5 pr-3 font-mono text-xs text-body">
             <span className="relative flex h-2 w-2" aria-hidden>
               {dockerConnected && (
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
@@ -453,7 +453,7 @@ export function OpsConsolePage() {
               aria-haspopup="listbox"
               aria-expanded={engineOpen}
               onClick={() => setEngineOpen((o) => !o)}
-              className="flex min-h-[36px] cursor-pointer items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900 py-1 pl-2.5 pr-2.5 text-xs text-slate-300 transition-colors duration-200 hover:border-slate-600"
+              className="flex min-h-[36px] cursor-pointer items-center gap-2 rounded-full border border-hairline bg-panel py-1 pl-2.5 pr-2.5 text-xs text-body transition-colors duration-200 hover:border-muted"
             >
               <span className="relative flex h-2 w-2" aria-hidden>
                 {(engineHealth.status === 'live' || engineHealth.status === 'checking') && (
@@ -463,8 +463,8 @@ export function OpsConsolePage() {
                 )}
                 <span className={`relative inline-flex h-2 w-2 rounded-full ${engineDot}`} />
               </span>
-              <Cpu className="h-3.5 w-3.5 text-slate-400" aria-hidden />
-              <span className="max-w-[220px] truncate font-mono text-xs text-slate-100">
+              <Cpu className="h-3.5 w-3.5 text-muted" aria-hidden />
+              <span className="max-w-[220px] truncate font-mono text-xs text-ink">
                 {shortModel(effectiveModel || 'openrouter/free')}
               </span>
               <span
@@ -479,13 +479,13 @@ export function OpsConsolePage() {
                         ? 'text-amber-300'
                         : engineHealth.status === 'down'
                           ? 'text-red-300'
-                          : 'text-slate-500'
+                          : 'text-muted'
                 }`}
               >
                 {engineText}
               </span>
               <ChevronDown
-                className={`h-3.5 w-3.5 text-slate-500 transition-transform duration-200 ${engineOpen ? 'rotate-180' : ''}`}
+                className={`h-3.5 w-3.5 text-muted transition-transform duration-200 ${engineOpen ? 'rotate-180' : ''}`}
                 aria-hidden
               />
             </button>
@@ -494,10 +494,10 @@ export function OpsConsolePage() {
                 role="listbox"
                 aria-label="Free models by live availability"
                 data-engine-list
-                className="terminal-scroll absolute right-0 z-40 mt-2 max-h-80 w-72 overflow-auto rounded-xl border border-slate-700 bg-slate-950 p-1.5 shadow-2xl shadow-black/60"
+                className="terminal-scroll absolute right-0 z-40 mt-2 max-h-80 w-72 overflow-auto rounded-xl border border-hairline bg-raised p-1.5 shadow-2xl shadow-black/60"
               >
                 {rankedModels.length === 0 && (
-                  <li className="px-3 py-2 text-xs text-slate-500">No models loaded yet…</li>
+                  <li className="px-3 py-2 text-xs text-muted">No models loaded yet…</li>
                 )}
                 {rankedModels.map((m) => (
                   <li key={m.id} role="option" aria-selected={m.id === effectiveModel}>
@@ -509,14 +509,14 @@ export function OpsConsolePage() {
                       }}
                       title={m.id}
                       className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors duration-150 ${
-                        m.id === effectiveModel ? 'bg-emerald-400/10' : 'hover:bg-slate-800/70'
+                        m.id === effectiveModel ? 'bg-emerald-400/10' : 'hover:bg-raised/70'
                       }`}
                     >
                       <span
                         aria-hidden
                         className={`h-1.5 w-1.5 flex-none rounded-full ${engineRowDot(m.status)}`}
                       />
-                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-100">
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink">
                         {shortModel(m.name || m.id)}
                       </span>
                       <span className={`flex-none font-mono text-[11px] ${engineRowText(m.status)}`}>
@@ -538,7 +538,7 @@ export function OpsConsolePage() {
                 ? `Re-check all models (last checked ${formatClockTime(statuses.dataUpdatedAt)})`
                 : 'Check all models now'
             }
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-slate-700/80 bg-slate-900 text-slate-400 transition-colors duration-200 hover:border-slate-600 hover:text-slate-100 disabled:cursor-wait disabled:opacity-50"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-hairline bg-panel text-muted transition-colors duration-200 hover:border-muted hover:text-ink disabled:cursor-wait disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${statuses.isFetching ? 'animate-spin' : ''}`} aria-hidden />
           </button>
@@ -549,7 +549,7 @@ export function OpsConsolePage() {
           </span>
           <span
             title="The backend uses the server OPENROUTER_API_KEY. No key is typed or stored in the browser."
-            className="flex min-h-[36px] cursor-help items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900 px-2.5 py-1 text-xs text-slate-400"
+            className="flex min-h-[36px] cursor-help items-center gap-1.5 rounded-full border border-hairline bg-panel px-2.5 py-1 text-xs text-muted"
           >
             <KeyRound className="h-3.5 w-3.5" aria-hidden />
             server key
@@ -579,9 +579,9 @@ export function OpsConsolePage() {
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <div className="min-w-0 space-y-4">
           {/* LEFT rail: input */}
-          <section className="overflow-hidden rounded-xl border border-slate-800 bg-[#0a0f1a]">
+          <section className="overflow-hidden rounded-xl border border-hairline bg-panel">
           <div
-            className="flex gap-1 border-b border-slate-800/80 p-2"
+            className="flex gap-1 border-b border-hairline/80 p-2"
             role="tablist"
             aria-label="Console input"
             data-tour="console-tabs"
@@ -597,7 +597,7 @@ export function OpsConsolePage() {
                   className={`flex min-h-[40px] flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors duration-200 ${
                     active
                       ? 'bg-emerald-400 text-slate-950'
-                      : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-100'
+                      : 'text-muted hover:bg-raised/70 hover:text-ink'
                   }`}
                 >
                   <Icon className="h-4 w-4" aria-hidden />
@@ -611,10 +611,10 @@ export function OpsConsolePage() {
             {tab === 'live' && (
               <div className="space-y-4">
                 <div data-tour="console-attach">
-                  <h3 className="text-sm font-medium text-slate-200">Attach</h3>
+                  <h3 className="text-sm font-medium text-ink">Attach</h3>
                   <label
                     htmlFor="target-container"
-                    className="mt-2 block text-[13px] font-medium text-slate-300"
+                    className="mt-2 block text-[13px] font-medium text-body"
                   >
                     Target Container:
                   </label>
@@ -629,7 +629,7 @@ export function OpsConsolePage() {
                       placeholder="container name, e.g. crashme-1"
                       spellCheck={false}
                       autoComplete="off"
-                      className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-[13px] text-slate-100 placeholder:text-slate-600"
+                      className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-hairline bg-raised px-3 py-2 font-mono text-[13px] text-ink placeholder:text-muted"
                     />
                     <button
                       type="button"
@@ -640,19 +640,19 @@ export function OpsConsolePage() {
                       <ArrowRight className="h-4 w-4" aria-hidden />
                     </button>
                   </div>
-                  <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted">
                     Read-only tail, refreshed every 10s. Nothing is executed inside containers.
                   </p>
                 </div>
 
                 <div data-tour="console-containers">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-slate-200">Containers</h3>
+                    <h3 className="text-sm font-medium text-ink">Containers</h3>
                     <button
                       type="button"
                       onClick={() => containers.refetch()}
                       disabled={containers.isFetching}
-                      className="flex min-h-[32px] cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs text-slate-400 transition-colors duration-200 hover:text-slate-100 disabled:cursor-wait disabled:opacity-60"
+                      className="flex min-h-[32px] cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs text-muted transition-colors duration-200 hover:text-ink disabled:cursor-wait disabled:opacity-60"
                       title="Re-list containers now"
                     >
                       <RefreshCw
@@ -663,7 +663,7 @@ export function OpsConsolePage() {
                     </button>
                   </div>
                   {containers.isLoading ? (
-                    <p className="mt-2 text-sm text-slate-400">Listing containers…</p>
+                    <p className="mt-2 text-sm text-muted">Listing containers…</p>
                   ) : containers.isError ? (
                     <p className="mt-2 rounded-lg border border-amber-500/25 bg-amber-950/30 p-2.5 text-[13px] text-amber-200">
                       Docker list unavailable:{' '}
@@ -671,7 +671,7 @@ export function OpsConsolePage() {
                       <span className="text-amber-200/70">(Is the daemon running?)</span>
                     </p>
                   ) : (containers.data ?? []).length === 0 ? (
-                    <p className="mt-2 text-sm text-slate-400">No containers found.</p>
+                    <p className="mt-2 text-sm text-muted">No containers found.</p>
                   ) : (
                     <>
                       <div className="mt-2 flex items-center gap-2">
@@ -683,21 +683,21 @@ export function OpsConsolePage() {
                           placeholder="Filter by name, status, project…"
                           spellCheck={false}
                           autoComplete="off"
-                          className="min-h-[36px] min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-xs text-slate-100 placeholder:text-slate-600"
+                          className="min-h-[36px] min-w-0 flex-1 rounded-lg border border-hairline bg-raised px-2.5 py-1.5 font-mono text-xs text-ink placeholder:text-muted"
                         />
                         {containerFilter && (
-                          <span className="flex-none font-mono text-[11px] tabular-nums text-slate-500">
+                          <span className="flex-none font-mono text-[11px] tabular-nums text-muted">
                             {visibleContainers.length}/{(containers.data ?? []).length}
                           </span>
                         )}
                       </div>
                       {visibleContainers.length === 0 ? (
-                        <p className="mt-2 text-sm text-slate-400">
+                        <p className="mt-2 text-sm text-muted">
                           No containers match “{containerQuery.trim()}”.{' '}
                           <button
                             type="button"
                             onClick={() => setContainerQuery('')}
-                            className="cursor-pointer underline underline-offset-2 hover:text-slate-200"
+                            className="cursor-pointer underline underline-offset-2 hover:text-ink"
                           >
                             Clear
                           </button>
@@ -707,19 +707,19 @@ export function OpsConsolePage() {
                       {containerGroups.map((group) => (
                         <div key={group.project}>
                           {containerGroups.length > 1 && (
-                            <p className="font-mono text-[11px] text-slate-500">{group.project}</p>
+                            <p className="font-mono text-[11px] text-muted">{group.project}</p>
                           )}
                           {group.active.length > 0 && (
-                            <ul className="divide-y divide-slate-800/70">
+                            <ul className="divide-y divide-faint">
                               {group.active.map((c) => containerRow(c))}
                             </ul>
                           )}
                           {group.exited.length > 0 && (
                             <details className="mt-1">
-                              <summary className="min-h-[32px] cursor-pointer py-1 text-xs text-slate-500 transition-colors duration-200 hover:text-slate-200">
+                              <summary className="min-h-[32px] cursor-pointer py-1 text-xs text-muted transition-colors duration-200 hover:text-ink">
                                 Exited ({group.exited.length})
                               </summary>
-                              <ul className="divide-y divide-slate-800/70">
+                              <ul className="divide-y divide-faint">
                                 {group.exited.map((c) => containerRow(c))}
                               </ul>
                             </details>
@@ -737,34 +737,34 @@ export function OpsConsolePage() {
             {tab === 'manual' && (
               <div className="space-y-3">
                 <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
                     Paste logs manually
                   </p>
-                  <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted">
                     Same evidence extractor as the Docker watcher. Needs a real traceback / OOM /
                     exit-code line — plain “hello” is rejected with 422.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs font-medium text-slate-300">
+                  <label className="text-xs font-medium text-body">
                     Project
                     <input
                       value={manualProject}
                       onChange={(e) => setManualProject(e.target.value)}
                       spellCheck={false}
                       autoComplete="off"
-                      className="mt-1 min-h-[40px] w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-[13px]"
+                      className="mt-1 min-h-[40px] w-full rounded-lg border border-hairline bg-raised px-2.5 py-1.5 font-mono text-[13px]"
                     />
                   </label>
-                  <label className="text-xs font-medium text-slate-300">
-                    Container <span className="font-normal text-slate-500">(optional)</span>
+                  <label className="text-xs font-medium text-body">
+                    Container <span className="font-normal text-muted">(optional)</span>
                     <input
                       value={manualContainer}
                       onChange={(e) => setManualContainer(e.target.value)}
                       placeholder="crashme-1"
                       spellCheck={false}
                       autoComplete="off"
-                      className="mt-1 min-h-[40px] w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-[13px] placeholder:text-slate-600"
+                      className="mt-1 min-h-[40px] w-full rounded-lg border border-hairline bg-raised px-2.5 py-1.5 font-mono text-[13px] placeholder:text-muted"
                     />
                   </label>
                 </div>
@@ -775,7 +775,7 @@ export function OpsConsolePage() {
                   rows={9}
                   spellCheck={false}
                   placeholder={'Traceback (most recent call last):\n  ...\nZeroDivisionError: division by zero'}
-                  className="terminal-scroll w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 font-mono text-xs leading-relaxed placeholder:text-slate-600"
+                  className="terminal-scroll w-full rounded-lg border border-hairline bg-raised p-2.5 font-mono text-xs leading-relaxed placeholder:text-muted"
                 />
                 <button
                   type="button"
@@ -791,10 +791,10 @@ export function OpsConsolePage() {
             {tab === 'copilot' && (
               <div className="space-y-3">
                 <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
                     Ask SRE Copilot
                   </p>
-                  <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted">
                     Stateless Q&amp;A grounded in runbooks + optional incident. No actions are taken.
                   </p>
                 </div>
@@ -805,7 +805,7 @@ export function OpsConsolePage() {
                   placeholder="Incident ID (optional)"
                   spellCheck={false}
                   autoComplete="off"
-                  className="min-h-[40px] w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-xs placeholder:text-slate-600"
+                  className="min-h-[40px] w-full rounded-lg border border-hairline bg-raised px-2.5 py-1.5 font-mono text-xs placeholder:text-muted"
                 />
                 <textarea
                   aria-label="Question for copilot"
@@ -813,7 +813,7 @@ export function OpsConsolePage() {
                   onChange={(e) => setCopilotQ(e.target.value)}
                   rows={4}
                   placeholder="Why did this container crash and what should I check first?"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-sm leading-relaxed placeholder:text-slate-600"
+                  className="w-full rounded-lg border border-hairline bg-raised p-2.5 text-sm leading-relaxed placeholder:text-muted"
                 />
                 <button
                   type="button"
@@ -824,9 +824,9 @@ export function OpsConsolePage() {
                   {busy === 'copilot' ? 'Asking…' : 'Ask'}
                 </button>
                 {copilotOut && (
-                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-sm">
-                    <p className="leading-relaxed text-slate-100">{copilotOut.answer}</p>
-                    <p className="mt-2 font-mono text-[11px] leading-relaxed text-slate-500">
+                  <div className="rounded-lg border border-hairline bg-raised p-3 text-sm">
+                    <p className="leading-relaxed text-ink">{copilotOut.answer}</p>
+                    <p className="mt-2 font-mono text-[11px] leading-relaxed text-muted">
                       {copilotOut.actual_model || '—'} · {copilotOut.total_tokens} tokens
                       {copilotOut.confidence !== null ? ` · conf ${copilotOut.confidence}` : ''}
                       {(copilotOut.evidence_ids ?? []).length > 0 &&
@@ -843,11 +843,11 @@ export function OpsConsolePage() {
 
         {/* LEFT: live terminal tail */}
         <section
-          className="overflow-hidden rounded-xl border border-slate-800 bg-[#0a0f1a]"
+          className="overflow-hidden rounded-xl border border-hairline bg-panel"
           data-tour="console-terminal"
         >
           {/* Window chrome */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-800/80 bg-slate-950/60 px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-2 border-b border-hairline/80 bg-abyss/60 px-3 py-2.5">
             <span className="flex gap-1.5" aria-hidden>
               <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
               <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
@@ -855,7 +855,7 @@ export function OpsConsolePage() {
                 className={`h-2.5 w-2.5 rounded-full ${attached ? 'bg-emerald-400/70' : 'bg-slate-700'}`}
               />
             </span>
-            <h2 className="flex min-w-0 flex-1 items-center gap-2 truncate font-mono text-xs text-slate-300">
+            <h2 className="flex min-w-0 flex-1 items-center gap-2 truncate font-mono text-xs text-body">
               {attached ? (
                 <>
                   <span
@@ -869,27 +869,27 @@ export function OpsConsolePage() {
                     LIVE
                   </span>
                   <span className="truncate">
-                    live tail — <span className="text-slate-100">{attached}</span>
+                    live tail — <span className="text-ink">{attached}</span>
                   </span>
                 </>
               ) : (
-                <span className="text-slate-500">no container attached</span>
+                <span className="text-muted">no container attached</span>
               )}
             </h2>
             {attached && !logs.isLoading && (
               <span
-                className="font-mono text-[11px] tabular-nums text-slate-500"
+                className="font-mono text-[11px] tabular-nums text-muted"
                 title="Last successful tail refresh (auto-refreshes every 10s)"
               >
                 {logs.isFetching ? 'updating…' : `updated ${formatClockTime(logs.dataUpdatedAt)}`}
               </span>
             )}
-            <label className="flex items-center gap-1 font-mono text-[11px] text-slate-500">
+            <label className="flex items-center gap-1 font-mono text-[11px] text-muted">
               lines
               <select
                 value={tail}
                 onChange={(e) => setTail(Number(e.target.value))}
-                className="cursor-pointer rounded-md border border-slate-700 bg-slate-950 px-1.5 py-1 text-[11px] text-slate-200"
+                className="cursor-pointer rounded-md border border-hairline bg-raised px-1.5 py-1 text-[11px] text-ink"
               >
                 {[100, 200, 500].map((n) => (
                   <option key={n} value={n}>
@@ -904,7 +904,7 @@ export function OpsConsolePage() {
               disabled={!attached || logs.isFetching}
               aria-label="Refresh logs"
               title="Refresh logs"
-              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-slate-700 text-slate-300 transition-colors duration-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-hairline text-body transition-colors duration-200 hover:bg-raised disabled:cursor-not-allowed disabled:opacity-40"
             >
               <RefreshCw
                 className={`h-3.5 w-3.5 ${logs.isFetching ? 'animate-spin' : ''}`}
@@ -915,17 +915,17 @@ export function OpsConsolePage() {
 
           {!attached ? (
             <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-800 bg-slate-950">
-                <Terminal className="h-5 w-5 text-slate-500" aria-hidden />
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-hairline bg-raised">
+                <Terminal className="h-5 w-5 text-muted" aria-hidden />
               </span>
-              <p className="text-sm font-medium text-slate-200">Attach a container to stream logs</p>
-              <p className="max-w-sm text-xs leading-relaxed text-slate-500">
+              <p className="text-sm font-medium text-ink">Attach a container to stream logs</p>
+              <p className="max-w-sm text-xs leading-relaxed text-muted">
                 Pick a container on the left, or type its name above. The tail refreshes every 10s
                 and never executes anything inside the container.
               </p>
             </div>
           ) : logs.isLoading ? (
-            <p className="px-4 py-10 text-center font-mono text-xs text-slate-500">
+            <p className="px-4 py-10 text-center font-mono text-xs text-muted">
               <span className="animate-pulse">▊ connecting to {attached}…</span>
             </p>
           ) : logs.isError ? (
@@ -934,7 +934,7 @@ export function OpsConsolePage() {
               {logs.error instanceof Error ? logs.error.message : 'unknown error'}
             </p>
           ) : logLines.length === 0 ? (
-            <p className="px-4 py-10 text-center font-mono text-xs text-slate-500">
+            <p className="px-4 py-10 text-center font-mono text-xs text-muted">
               — no log lines returned —
             </p>
           ) : (
@@ -944,7 +944,7 @@ export function OpsConsolePage() {
                   truncated — showing the most recent 100k characters
                 </p>
               )}
-              <pre className="terminal-scroll log-lines max-h-[480px] overflow-auto px-3 py-3 font-mono text-xs leading-[1.7] text-slate-300">
+              <pre className="terminal-scroll log-lines max-h-[480px] overflow-auto px-3 py-3 font-mono text-xs leading-[1.7] text-body">
                 {logLines.map((line, i) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: log tail has no stable ids; index is the order
                   <div key={i} className="log-line">
@@ -952,7 +952,7 @@ export function OpsConsolePage() {
                   </div>
                 ))}
               </pre>
-              <div className="space-y-2.5 border-t border-slate-800/80 p-4">
+              <div className="space-y-2.5 border-t border-hairline/80 p-4">
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -964,7 +964,7 @@ export function OpsConsolePage() {
                     {busy === 'diagnose' ? 'Recording…' : 'Diagnose these logs'}
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed text-slate-500">
+                <p className="text-[11px] leading-relaxed text-muted">
                   Diagnose records one incident (deduplicated by fingerprint). The
                   diagnosis appears in the panel on the right.
                 </p>
@@ -976,13 +976,13 @@ export function OpsConsolePage() {
 
         {/* RIGHT: incident diagnostic */}
         <section
-          className="overflow-hidden rounded-xl border border-slate-800 bg-[#0a0f1a] lg:sticky lg:top-24"
+          className="overflow-hidden rounded-xl border border-hairline bg-panel lg:sticky lg:top-24"
           data-tour="console-diagnose"
           aria-label="Incident diagnostic"
         >
-          <div className="border-b border-slate-800/80 bg-slate-950/60 px-4 py-3">
-            <h2 className="text-sm font-medium text-slate-200">Diagnostic</h2>
-            <h2 className="mt-0.5 text-sm font-semibold tracking-tight text-slate-100">
+          <div className="border-b border-hairline/80 bg-abyss/60 px-4 py-3">
+            <h2 className="text-sm font-medium text-ink">Diagnostic</h2>
+            <h2 className="mt-0.5 text-sm font-semibold tracking-tight text-ink">
               {madeIncident ? (
                 <>Incident · <span className="font-mono text-[13px]">{madeIncident.title}</span></>
               ) : (
@@ -993,11 +993,11 @@ export function OpsConsolePage() {
           <div className="space-y-3 p-4">
             {!madeIncident ? (
               <>
-                <p className="text-sm leading-relaxed text-slate-400">
+                <p className="text-sm leading-relaxed text-muted">
                   Diagnose a log tail on the left and the incident lands here — with its
                   AI investigation and downloadable report. Nothing runs until you ask.
                 </p>
-                <p className="text-[11px] leading-relaxed text-slate-600">
+                <p className="text-[11px] leading-relaxed text-muted">
                   states: recorded → investigating → completed / failed
                 </p>
               </>
@@ -1010,7 +1010,7 @@ export function OpsConsolePage() {
                   >
                     Open incident →
                   </Link>
-                  <span className="font-mono text-[11px] text-slate-500">
+                  <span className="font-mono text-[11px] text-muted">
                     {historyActive
                       ? 'investigation running…'
                       : history.data && history.data.length > 0
@@ -1029,7 +1029,7 @@ export function OpsConsolePage() {
                   </button>
                 </div>
                 {history.isLoading ? (
-                  <p className="text-sm text-slate-400">Loading investigation history…</p>
+                  <p className="text-sm text-muted">Loading investigation history…</p>
                 ) : history.isError ? (
                   <p role="alert" className="text-sm text-amber-300">
                     Could not load investigation history.{' '}
@@ -1038,7 +1038,7 @@ export function OpsConsolePage() {
                     </button>
                   </p>
                 ) : (history.data ?? []).length === 0 ? (
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-muted">
                     Recorded. Press Investigate to run the AI with the engine shown above —
                     free models only.
                   </p>
@@ -1056,7 +1056,7 @@ export function OpsConsolePage() {
                     ))}
                   </ul>
                 )}
-                <p className="text-[11px] leading-relaxed text-slate-500">
+                <p className="text-[11px] leading-relaxed text-muted">
                   Investigation runs explicitly with the engine shown above — free models
                   only. Completed reports download as .docx.
                 </p>

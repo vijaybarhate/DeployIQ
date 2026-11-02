@@ -51,11 +51,11 @@ export function IncidentCenterPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-50">Incident Center</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="mt-1 text-sm text-muted">
           Latest {incidents.data?.length ?? 0} incidents. Search and filters apply to the loaded
           collection.
         </p>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-muted">
           Each row is one crash fingerprint: every repeat sighting raises its observation count
           instead of opening a duplicate.
         </p>
@@ -67,14 +67,14 @@ export function IncidentCenterPage() {
           placeholder="Search title, signature, or project…"
           aria-label="Search incidents"
           data-tour="center-search"
-          className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-700 bg-[#0a0f1a] px-3 py-2 text-sm placeholder:text-slate-600"
+          className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-hairline bg-panel px-3 py-2 text-sm placeholder:text-muted"
         />
         <select
           value={filter.source}
           onChange={(e) => set('source', e.target.value as IncidentFilter['source'])}
           aria-label="Filter by source"
           data-tour="center-source"
-          className="min-h-[44px] cursor-pointer rounded-lg border border-slate-700 bg-[#0a0f1a] px-2 py-2 text-sm"
+          className="min-h-[44px] cursor-pointer rounded-lg border border-hairline bg-panel px-2 py-2 text-sm"
         >
           <option value="all">All sources</option>
           <option value="docker">Docker</option>
@@ -85,7 +85,7 @@ export function IncidentCenterPage() {
           onChange={(e) => set('status', e.target.value as IncidentFilter['status'])}
           aria-label="Filter by status"
           data-tour="center-status"
-          className="min-h-[44px] cursor-pointer rounded-lg border border-slate-700 bg-[#0a0f1a] px-2 py-2 text-sm"
+          className="min-h-[44px] cursor-pointer rounded-lg border border-hairline bg-panel px-2 py-2 text-sm"
         >
           <option value="all">All statuses</option>
           <option value="open">Open</option>
@@ -97,7 +97,7 @@ export function IncidentCenterPage() {
           onChange={(e) => set('sort', e.target.value as IncidentSort)}
           aria-label="Sort incidents"
           data-tour="center-sort"
-          className="min-h-[44px] cursor-pointer rounded-lg border border-slate-700 bg-[#0a0f1a] px-2 py-2 text-sm"
+          className="min-h-[44px] cursor-pointer rounded-lg border border-hairline bg-panel px-2 py-2 text-sm"
         >
           {(Object.keys(SORT_LABELS) as IncidentSort[]).map((s) => (
             <option key={s} value={s}>
@@ -109,10 +109,10 @@ export function IncidentCenterPage() {
       {rows.length === 0 ? (
         <EmptyState title="No incidents match" hint="Adjust the search, filters, or sorting." />
       ) : (
-        <div data-tour="center-table" className="overflow-x-auto rounded-xl border border-slate-800 bg-[#0a0f1a]">
-          <table className="w-full min-w-[720px] divide-y divide-slate-800/80 text-left text-[13px]">
+        <div data-tour="center-table" className="overflow-x-auto rounded-xl border border-hairline bg-panel">
+          <table className="w-full min-w-[720px] divide-y divide-hairline/80 text-left text-[13px]">
             <thead>
-              <tr className="text-xs font-medium text-slate-500">
+              <tr className="text-xs font-medium text-muted">
                 <th scope="col" className="px-3 py-2 font-medium">Incident</th>
                 <th scope="col" className="px-3 py-2 font-medium">Project</th>
                 <th scope="col" className="px-3 py-2 font-medium">Source</th>
@@ -122,19 +122,19 @@ export function IncidentCenterPage() {
                 <th scope="col" className="px-3 py-2 font-medium">Last seen</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-faint">
               {rows.map((i) => (
-                <tr key={i.id} className="transition-colors duration-150 hover:bg-slate-800/30">
+                <tr key={i.id} className="transition-colors duration-150 hover:bg-raised/30">
                   <td className="max-w-[320px] px-3 py-2">
-                    <Link to={`/incidents/${i.id}`} className="font-medium tracking-tight text-slate-100 underline-offset-4 hover:underline">
+                    <Link to={`/incidents/${i.id}`} className="font-medium tracking-tight text-ink underline-offset-4 hover:underline">
                       {i.title}
                     </Link>
-                    <p className="truncate font-mono text-[11px] text-slate-500">{i.error_signature}</p>
+                    <p className="truncate font-mono text-[11px] text-muted">{i.error_signature}</p>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-300">{i.project_id}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-400">{sourceLabel(i.source)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-body">{i.project_id}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted">{sourceLabel(i.source)}</td>
                   <td className="whitespace-nowrap px-3 py-2">
-                    <span className="flex items-center gap-1.5 text-xs text-slate-300">
+                    <span className="flex items-center gap-1.5 text-xs text-body">
                       <span
                         aria-hidden
                         className={`h-1.5 w-1.5 rounded-full ${SEVERITY_DOT[i.severity?.toLowerCase() ?? ''] ?? 'bg-slate-500'}`}
@@ -142,9 +142,9 @@ export function IncidentCenterPage() {
                       {i.severity ?? 'unclassified'}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-300">{i.status}</td>
-                  <td className="px-3 py-2 tabular-nums text-slate-300">{i.observation_count}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs tabular-nums text-slate-400">{formatDateTime(i.last_seen)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-xs text-body">{i.status}</td>
+                  <td className="px-3 py-2 tabular-nums text-body">{i.observation_count}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs tabular-nums text-muted">{formatDateTime(i.last_seen)}</td>
                 </tr>
               ))}
             </tbody>

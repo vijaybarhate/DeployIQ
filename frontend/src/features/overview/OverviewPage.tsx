@@ -34,20 +34,20 @@ export function OverviewPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
           Operational overview
         </h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="mt-1 text-sm text-muted">
           Watch tails your containers, Group merges repeat crashes, Explain runs the AI
           investigation. Open the console or take the tour to see it live.
         </p>
       </div>
-      <section aria-label="System status" data-tour="overview-counts" className="rounded-xl border border-slate-800 bg-[#0a0f1a] px-4 py-3">
-        <p className="text-sm tabular-nums text-slate-300">
+      <section aria-label="System status" data-tour="overview-counts" className="rounded-xl border border-hairline bg-panel px-4 py-3">
+        <p className="text-sm tabular-nums text-body">
           {needsAttention ? (
             <>
               <span className="relative mr-1 inline-flex h-2 w-2" aria-hidden>
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              <Link to="/incidents" className="font-semibold text-slate-100 underline-offset-4 hover:underline">
+              <Link to="/incidents" className="font-semibold text-ink underline-offset-4 hover:underline">
                 {summary.open} open
               </Link>
               {' · '}
@@ -61,38 +61,38 @@ export function OverviewPage() {
           {summary.latestSeen ? ` · latest activity ${formatDateTime(summary.latestSeen)}` : ''}
         </p>
       </section>
-      <section aria-label="Collector status" data-tour="overview-collector" className="rounded-xl border border-slate-800 bg-[#0a0f1a] p-4">
-        <h2 className="text-sm font-medium text-slate-200">Collector status</h2>
+      <section aria-label="Collector status" data-tour="overview-collector" className="rounded-xl border border-hairline bg-panel p-4">
+        <h2 className="text-sm font-medium text-ink">Collector status</h2>
         <CollectorStatus />
       </section>
       <div className="grid gap-4 lg:grid-cols-2">
-        <section aria-label="Projects" className="rounded-xl border border-slate-800 bg-[#0a0f1a] p-4">
-          <h2 className="text-sm font-medium text-slate-200">Projects and sources in view</h2>
+        <section aria-label="Projects" className="rounded-xl border border-hairline bg-panel p-4">
+          <h2 className="text-sm font-medium text-ink">Projects and sources in view</h2>
           {summary.projects.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-400">No projects yet.</p>
+            <p className="mt-2 text-sm text-muted">No projects yet.</p>
           ) : (
             <>
-              <p className="mt-2 font-mono text-xs text-slate-300">
+              <p className="mt-2 font-mono text-xs text-body">
                 {summary.projects.join(' · ')}
               </p>
-              <p className="mt-1 font-mono text-xs text-slate-500">
+              <p className="mt-1 font-mono text-xs text-muted">
                 {Object.entries(summary.bySource).map(([src, count]) => `${src} × ${count}`).join(' · ')}
               </p>
             </>
           )}
         </section>
-        <section aria-label="Recent incidents" data-tour="overview-recent" className="rounded-xl border border-slate-800 bg-[#0a0f1a] p-4">
-          <h2 className="text-sm font-medium text-slate-200">Recent incidents</h2>
+        <section aria-label="Recent incidents" data-tour="overview-recent" className="rounded-xl border border-hairline bg-panel p-4">
+          <h2 className="text-sm font-medium text-ink">Recent incidents</h2>
           {recent.length === 0 ? (
             <EmptyState
               title="No incidents yet"
               hint="Trigger a failure in a monitored project (e.g. GET /boom on the demo app) and it will appear here."
             />
           ) : (
-            <ul className="mt-2 divide-y divide-slate-800/70">
+            <ul className="mt-2 divide-y divide-faint">
               {recent.map((i) => (
                 <li key={i.id} className="flex flex-wrap items-center gap-2 py-2 text-sm first:pt-0 last:pb-0">
-                  <Link to={`/incidents/${i.id}`} className="min-w-0 flex-1 truncate text-slate-100 hover:underline">
+                  <Link to={`/incidents/${i.id}`} className="min-w-0 flex-1 truncate text-ink hover:underline">
                     {i.title}
                   </Link>
                   <SeverityBadge value={i.severity} />
@@ -109,12 +109,12 @@ export function OverviewPage() {
 
 function CollectorStatus() {
   const health = useHealth();
-  if (health.isLoading) return <p className="mt-1 text-sm text-slate-400">Checking…</p>;
+  if (health.isLoading) return <p className="mt-1 text-sm text-muted">Checking…</p>;
   if (health.isError || !health.data)
-    return <p className="mt-1 text-sm text-slate-400">Collector status unavailable.</p>;
+    return <p className="mt-1 text-sm text-muted">Collector status unavailable.</p>;
   const docker = health.data.docker;
   return (
-    <p className="mt-1 text-sm text-slate-300">
+    <p className="mt-1 text-sm text-body">
       Docker collector:{' '}
       <span className={docker.connected ? 'text-emerald-400' : 'text-amber-400'}>
         {docker.connected

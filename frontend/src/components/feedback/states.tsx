@@ -1,6 +1,6 @@
 export function LoadingState({ message = 'Loading…' }: { message?: string }) {
   return (
-    <div role="status" aria-live="polite" className="rounded-md border border-slate-800 bg-slate-900 p-6 text-center text-sm text-slate-300">
+    <div role="status" aria-live="polite" className="rounded-xl border border-hairline bg-panel p-6 text-center text-sm text-body">
       {message}
     </div>
   );
@@ -26,9 +26,9 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="rounded-md border border-dashed border-slate-700 bg-slate-900/50 p-6 text-center">
-      <p className="text-sm font-medium text-slate-200">{title}</p>
-      {hint && <p className="mt-1 text-sm text-slate-400">{hint}</p>}
+    <div className="rounded-xl border border-dashed border-hairline bg-panel/50 p-6 text-center">
+      <p className="text-sm font-medium text-ink">{title}</p>
+      {hint && <p className="mt-1 text-sm text-muted">{hint}</p>}
     </div>
   );
 }
