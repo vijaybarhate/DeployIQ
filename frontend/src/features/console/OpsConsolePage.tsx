@@ -400,7 +400,7 @@ export function OpsConsolePage() {
               setAttached(c.name);
               void diagnoseContainer(c.name, c.project);
             }}
-            className="flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-[13px] font-semibold text-slate-950 shadow-[0_0_18px_-8px_rgba(52,211,153,0.6)] transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            className="flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-[13px] font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Stethoscope className="h-3.5 w-3.5" aria-hidden />
             Diagnose
@@ -634,7 +634,7 @@ export function OpsConsolePage() {
                     <button
                       type="button"
                       onClick={() => attach(target)}
-                      className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-8px_rgba(52,211,153,0.55)] transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                      className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                     >
                       Attach &amp; Stream
                       <ArrowRight className="h-4 w-4" aria-hidden />
@@ -781,7 +781,7 @@ export function OpsConsolePage() {
                   type="button"
                   onClick={submitManual}
                   disabled={busy === 'manual' || !manualText.trim()}
-                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold shadow-[0_0_20px_-8px_rgba(52,211,153,0.55)] text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy === 'manual' ? 'Recording…' : 'Record incident'}
                 </button>
@@ -819,7 +819,7 @@ export function OpsConsolePage() {
                   type="button"
                   onClick={ask}
                   disabled={busy === 'copilot' || !copilotQ.trim()}
-                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold shadow-[0_0_20px_-8px_rgba(52,211,153,0.55)] text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy === 'copilot' ? 'Asking…' : 'Ask'}
                 </button>
@@ -944,7 +944,7 @@ export function OpsConsolePage() {
                   truncated — showing the most recent 100k characters
                 </p>
               )}
-              <pre className="terminal-scroll terminal-grid log-lines max-h-[480px] overflow-auto px-3 py-3 font-mono text-xs leading-[1.7] text-slate-300">
+              <pre className="terminal-scroll log-lines max-h-[480px] overflow-auto px-3 py-3 font-mono text-xs leading-[1.7] text-slate-300">
                 {logLines.map((line, i) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: log tail has no stable ids; index is the order
                   <div key={i} className="log-line">
@@ -1021,7 +1021,7 @@ export function OpsConsolePage() {
                     type="button"
                     onClick={() => runInvestigation(madeIncident.id)}
                     disabled={busy === 'investigate' || historyActive}
-                    className="ml-auto flex min-h-[40px] cursor-pointer items-center rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-8px_rgba(52,211,153,0.55)] transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                    className="ml-auto flex min-h-[40px] cursor-pointer items-center rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                   >
                     {busy === 'investigate'
                       ? 'Starting…'
