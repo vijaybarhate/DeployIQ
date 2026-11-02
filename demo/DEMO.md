@@ -15,7 +15,7 @@ docker compose (demo/crashme: ok / boom / dead)
   -> FastAPI:
        GET /api/v1/docker/containers + /logs (read-only, scope-enforced)
        POST /api/v1/incidents/manual (evidence extractor, matched lines)
-       POST /api/v1/models + /models/check|/status (verified free catalogue)
+       GET /api/v1/models + /models/check|/status (verified free catalogue)
        POST /api/v1/copilot/ask (stateless grounded Q&A, no persistence)
        POST /api/v1/incidents/{id}/investigations (explicit trigger only)
        GET  .../investigations/{inv}/report (.docx download)

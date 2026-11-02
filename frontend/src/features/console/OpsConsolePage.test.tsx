@@ -342,4 +342,43 @@ describe('OpsConsolePage', () => {
     const link = screen.getByRole('link', { name: /Download report/ });
     expect(link.getAttribute('href')).toContain('/report');
   });
+
+  it('re-check button bypasses the server cache with refresh=true', async () => {
+    const seen: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/models/status')) {
+          seen.push(url);
+          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+        }
+        if (url.includes('/models')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+        }
+        if (url.includes('/docker/containers')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+        }
+        if (url.includes('/logs')) {
+          return {
+            ok: true, status: 200, statusText: 'OK',
+            json: async () => ({ name: 'c1', lines: [], truncated: false }),
+          } as Response;
+        }
+        return {
+          ok: true, status: 200, statusText: 'OK',
+          json: async () => ({ ok: true, service: 'x', docker: { connected: true } }),
+        } as Response;
+      }),
+    );
+    renderPage();
+    await screen.findByRole('heading', { name: 'Operations console' });
+    await waitFor(() => {
+      expect(seen.some((u) => u.includes('/models/status') && !u.includes('refresh'))).toBe(true);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Re-check all models' }));
+    await waitFor(() => {
+      expect(seen.some((u) => u.includes('refresh=true'))).toBe(true);
+    });
+  });
 });

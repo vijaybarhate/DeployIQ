@@ -565,6 +565,28 @@ def test_trigger_rejects_unverified_fallback(monkeypatch, _verified_catalog):
     assert r.status_code == 422, r.text
 
 
+def test_trigger_rejects_empty_default_without_override(monkeypatch, _verified_catalog):
+    _fake_settings(monkeypatch, model="")
+    r = client.post(f"/api/v1/incidents/{uuid.uuid4()}/investigations", json={})
+    assert r.status_code == 422, r.text
+
+
+def test_numbered_keys_load_from_dotenv_file(tmp_path, monkeypatch):
+    from app.config import Settings
+
+    env = tmp_path / ".env"
+    env.write_text(
+        "OPENROUTER_API_KEY1=friend-one\nOPENROUTER_API_KEY2=friend-two\n",
+        encoding="utf-8",
+    )
+    # Isolate from any real environment: the pool must come from the file alone.
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    for i in range(1, 10):
+        monkeypatch.delenv(f"OPENROUTER_API_KEY{i}", raising=False)
+    s = Settings(_env_file=str(env))
+    assert s.openrouter_api_keys == ["friend-one", "friend-two"]
+
+
 def test_manual_ingest_ok_and_dedup():
     logs = (
         "Traceback (most recent call last):\n"
@@ -638,13 +660,13 @@ def test_copilot_paid_override_rejected_without_context(_verified_catalog):
 def _accept_all_models(monkeypatch):
     """Grounding tests assume policy passes; policy itself is tested elsewhere."""
 
-    async def _ok(model_id=None):
-        cleaned = (model_id or "").strip()
-        if not cleaned:
-            raise ValueError("empty")
-        return cleaned
+    async def _resolve(model_override=None):
+        cleaned = (model_override or "").strip()
+        return cleaned or "default:free"
 
-    monkeypatch.setattr(model_service, "ensure_verified_free_model", _ok)
+    # Patch the shared resolver (not just ensure_...): grounding tests must
+    # not depend on any locally configured default model.
+    monkeypatch.setattr(model_service, "resolve_verified_model", _resolve)
 
 
 def test_copilot_insufficient_context_without_llm(monkeypatch, _accept_all_models):

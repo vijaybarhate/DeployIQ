@@ -118,11 +118,14 @@ def _verified_default_model(monkeypatch):
     """Policy is covered in test_console; these flow tests assume a verified default."""
     import app.services.models as _models
 
-    async def _ok(model_id=None):
-        cleaned = (model_id or "").strip()
+    async def _resolve(model_override=None):
+        cleaned = (model_override or "").strip()
         return cleaned or "default:free"
 
-    monkeypatch.setattr(_models, "ensure_verified_free_model", _ok)
+    # Patch the shared resolver itself (not just ensure_...): on a clean
+    # runner there is no .env default, and resolve raises before ensure
+    # is ever reached. Flow tests assume a verified default.
+    monkeypatch.setattr(_models, "resolve_verified_model", _resolve)
 
 
 def _seed_incident() -> uuid.UUID:

@@ -12,8 +12,10 @@ import {
   Terminal,
 } from 'lucide-react';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { ApiError } from '../../lib/api/client';
-import { askCopilot, containerLogs, manualIngest } from '../../lib/api/console';
+import { askCopilot, containerLogs, listModelStatuses, manualIngest } from '../../lib/api/console';
 import { triggerInvestigation } from '../../lib/api/investigations';
 import { formatClockTime } from '../../lib/time';
 import {
@@ -94,6 +96,7 @@ export function OpsConsolePage() {
   const [tail, setTail] = useState(200);
   const [model, setModel] = useState(loadModel);
   const [engineOpen, setEngineOpen] = useState(false);
+  const [statusesRefreshing, setStatusesRefreshing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +110,7 @@ export function OpsConsolePage() {
   const [copilotIncident, setCopilotIncident] = useState('');
   const [copilotOut, setCopilotOut] = useState<CopilotAnswer | null>(null);
 
+  const queryClient = useQueryClient();
   const health = useHealth();
   const containers = useContainers();
   const models = useModels();
@@ -124,6 +128,17 @@ export function OpsConsolePage() {
     }, 5000);
     return () => clearInterval(timer);
   }, [historyActive, refetchHistory]);
+  // While a trigger POST is in flight the history may still be empty, so the
+  // active-poll above would never start: poll explicitly during the request.
+  // The endpoint is synchronous, so this only surfaces progress when a prior
+  // attempt is already running; the post-trigger refetch shows the result.
+  useEffect(() => {
+    if (busy !== 'investigate' || !madeIncident) return undefined;
+    const timer = setInterval(() => {
+      void refetchHistory();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [busy, madeIncident, refetchHistory]);
 
   useEffect(() => {
     try {
@@ -240,6 +255,19 @@ export function OpsConsolePage() {
     }
   }
 
+  async function refreshStatuses() {
+    // Bypass the 120s server cache on explicit user request: the button must
+    // re-ping the models, not just re-read cached verdicts.
+    setStatusesRefreshing(true);
+    try {
+      const fresh = await listModelStatuses(true);
+      queryClient.setQueryData(['model-statuses'], fresh);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Model status refresh failed');
+    } finally {
+      setStatusesRefreshing(false);
+    }
+  }
   async function diagnoseContainer(name: string, project?: string) {
     setBusy('diagnose');
     setError(null);
@@ -548,8 +576,8 @@ export function OpsConsolePage() {
           </div>
           <button
             type="button"
-            onClick={() => statuses.refetch()}
-            disabled={statuses.isFetching}
+            onClick={() => void refreshStatuses()}
+            disabled={statuses.isFetching || statusesRefreshing}
             aria-label="Re-check all models"
             title={
               statuses.dataUpdatedAt
@@ -558,7 +586,7 @@ export function OpsConsolePage() {
             }
             className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-hairline bg-panel text-muted transition-colors duration-200 hover:border-muted hover:text-ink disabled:cursor-wait disabled:opacity-50"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${statuses.isFetching ? 'animate-spin' : ''}`} aria-hidden />
+            <RefreshCw className={`h-3.5 w-3.5 ${statuses.isFetching || statusesRefreshing ? 'animate-spin' : ''}`} aria-hidden />
           </button>
           <span className="sr-only" role="status" aria-live="polite">
             {statuses.dataUpdatedAt
