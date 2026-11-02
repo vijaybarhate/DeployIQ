@@ -52,7 +52,7 @@ export function OpsConsolePage() {
   const [error, setError] = useState<string | null>(null);
   const [madeIncident, setMadeIncident] = useState<Incident | null>(null);
 
-  const [manualProject, setManualProject] = useState('demo');
+  const [manualProject, setManualProject] = useState('deployiq-demo');
   const [manualContainer, setManualContainer] = useState('');
   const [manualText, setManualText] = useState('');
 
@@ -115,10 +115,15 @@ export function OpsConsolePage() {
     setTab('live');
   }
 
-  async function diagnoseContainer(name: string) {
+  async function diagnoseContainer(name: string, project?: string) {
     setBusy('diagnose');
     setError(null);
     setNotice(null);
+    // Scope to the container's own Compose project: the backend fail-closes
+    // on unlisted projects, so sending the picker default would 403.
+    const scope =
+      (project || containers.data?.find((c) => c.name === name)?.project || '').trim() ||
+      'deployiq-demo';
     try {
       const tailLogs = await containerLogs(name, 500);
       const text = tailLogs.lines.join('\n');
@@ -127,14 +132,23 @@ export function OpsConsolePage() {
         return;
       }
       const incident = await manualIngest({
-        project_id: 'demo',
+        project_id: scope,
         raw_logs: text.slice(-20000),
         container_name: name,
       });
       setMadeIncident(incident);
       setNotice(`Incident ${incident.title} recorded. Open it to run AI investigation.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Diagnose failed');
+      if (err instanceof ApiError && err.status === 422) {
+        setError(
+          'These logs contain no crash evidence (no traceback, OOM, or exit lines). ' +
+            'Attach crashme-boom — or hit its /boom endpoint first — then Diagnose again.',
+        );
+      } else if (err instanceof ApiError && err.status === 403) {
+        setError(`Container project '${scope}' is outside the monitored scope.`);
+      } else {
+        setError(err instanceof Error ? err.message : 'Diagnose failed');
+      }
     } finally {
       setBusy(null);
     }
@@ -163,7 +177,7 @@ export function OpsConsolePage() {
     setNotice(null);
     try {
       const incident = await manualIngest({
-        project_id: manualProject.trim() || 'demo',
+        project_id: manualProject.trim() || 'deployiq-demo',
         raw_logs: manualText,
         container_name: manualContainer.trim() || undefined,
       });
@@ -378,10 +392,15 @@ export function OpsConsolePage() {
                     <button
                       type="button"
                       onClick={() => containers.refetch()}
-                      className="flex min-h-[32px] cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs text-slate-400 transition-colors duration-200 hover:text-slate-100"
+                      disabled={containers.isFetching}
+                      className="flex min-h-[32px] cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs text-slate-400 transition-colors duration-200 hover:text-slate-100 disabled:cursor-wait disabled:opacity-60"
+                      title="Re-list containers now"
                     >
-                      <RefreshCw className="h-3 w-3" aria-hidden />
-                      Refresh
+                      <RefreshCw
+                        className={`h-3 w-3 ${containers.isFetching ? 'animate-spin' : ''}`}
+                        aria-hidden
+                      />
+                      {containers.isFetching ? 'Refreshing…' : 'Refresh'}
                     </button>
                   </div>
                   {containers.isLoading ? (
@@ -446,7 +465,7 @@ export function OpsConsolePage() {
                                 type="button"
                                 onClick={() => {
                                   setAttached(c.name);
-                                  void diagnoseContainer(c.name);
+                                  void diagnoseContainer(c.name, c.project);
                                 }}
                                 className="flex min-h-[36px] flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-emerald-500/40 px-2 text-xs font-medium text-emerald-300 transition-colors duration-200 hover:bg-emerald-400/10"
                               >

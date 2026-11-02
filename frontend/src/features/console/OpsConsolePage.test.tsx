@@ -111,4 +111,58 @@ describe('OpsConsolePage', () => {
     await screen.findByText(/Autonomous SRE Agent/);
     expect(await screen.findByText('down')).toBeInTheDocument();
   });
+
+  it('diagnoses with the container project and guides on clean logs', async () => {
+    const posts: Array<{ url: string; body: string }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/models/check')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => ({}) } as Response;
+        }
+        if (url.includes('/models')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+        }
+        if (url.endsWith('/incidents/manual')) {
+          const body = String(init?.body ?? '');
+          posts.push({ url, body });
+          if (body.includes('Traceback')) {
+            return {
+              ok: true, status: 201, statusText: 'Created',
+              json: async () => ({ id: 'i1', title: 'boom incident' }),
+            } as Response;
+          }
+          return {
+            ok: false, status: 422, statusText: 'Unprocessable',
+            json: async () => ({ detail: 'no analyzable evidence in the provided logs' }),
+          } as Response;
+        }
+        if (url.includes('/logs')) {
+          return {
+            ok: true, status: 200, statusText: 'OK',
+            json: async () => ({ name: 'c1', lines: ['all quiet here'], truncated: false }),
+          } as Response;
+        }
+        if (url.includes('/docker/containers')) {
+          return {
+            ok: true, status: 200, statusText: 'OK',
+            json: async () => [
+              { name: 'c1', short_id: 'abc', status: 'running', health: '', project: 'my-proj' },
+            ],
+          } as Response;
+        }
+        return {
+          ok: true, status: 200, statusText: 'OK',
+          json: async () => ({ ok: true, service: 'x', docker: { connected: true } }),
+        } as Response;
+      }),
+    );
+    renderPage();
+    await screen.findByText('c1');
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnose' }));
+    // Clean tail: honest guidance instead of the raw backend 422.
+    expect(await screen.findByText(/no crash evidence/)).toBeInTheDocument();
+    expect(posts.some((p) => p.body.includes('"project_id":"my-proj"'))).toBe(true);
+  });
 });
