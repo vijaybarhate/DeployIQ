@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import {
   ArrowRight,
@@ -258,15 +258,79 @@ export function OpsConsolePage() {
       (c.health || '').toLowerCase().includes(containerFilter),
   );
 
+  // Group by Compose project; EXITED containers collapse into a native
+  // <details> so dead ones never crowd out the running ones.
+  const containerGroups = useMemo(() => {
+    const groups = new Map<string, typeof visibleContainers>();
+    for (const c of visibleContainers) {
+      const key = c.project || 'no project';
+      const list = groups.get(key);
+      if (list) list.push(c);
+      else groups.set(key, [c]);
+    }
+    return [...groups.entries()].map(([project, list]) => ({
+      project,
+      active: list.filter((c) => !c.status.toLowerCase().includes('exit')),
+      exited: list.filter((c) => c.status.toLowerCase().includes('exit')),
+    }));
+  }, [visibleContainers]);
+
+  function containerRow(c: (typeof visibleContainers)[number]) {
+    const running = c.status.toLowerCase().includes('run');
+    const isAttached = attached === c.name;
+    return (
+      <li
+        key={c.name}
+        className={`py-2 first:pt-0 last:pb-0 ${isAttached ? 'bg-emerald-400/[0.04]' : ''}`}
+      >
+        <span className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className={`h-1.5 w-1.5 flex-none rounded-full ${
+              running ? 'bg-emerald-400' : 'bg-slate-600'
+            }`}
+          />
+          <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-slate-100">
+            {c.name}
+          </span>
+          <span className="flex-none font-mono text-[11px] text-slate-500">
+            {c.status || 'unknown'}
+          </span>
+        </span>
+        <span className="mt-0.5 block truncate font-mono text-[11px] text-slate-600">
+          {c.health ? `health:${c.health}` : 'health:—'}
+          {c.short_id ? ` · ${c.short_id.slice(0, 12)}` : ''}
+        </span>
+        <span className="mt-1.5 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setAttached(c.name);
+              void diagnoseContainer(c.name, c.project);
+            }}
+            className="flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-[13px] font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Stethoscope className="h-3.5 w-3.5" aria-hidden />
+            Diagnose
+          </button>
+          <button
+            type="button"
+            onClick={() => attach(c.name)}
+            className="flex min-h-[40px] cursor-pointer items-center px-1 text-[13px] text-slate-400 underline-offset-4 transition-colors duration-200 hover:text-slate-100 hover:underline"
+          >
+            View logs
+          </button>
+        </span>
+      </li>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Page head */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-emerald-400">
-            DeployIQ // Autonomous SRE Agent
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-50">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
             Operations console
           </h1>
           <p className="mt-1 max-w-xl text-sm text-slate-400">
@@ -398,9 +462,7 @@ export function OpsConsolePage() {
             {tab === 'live' && (
               <div className="space-y-4">
                 <div data-tour="console-attach">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                    01 — Attach
-                  </p>
+                  <h3 className="text-sm font-medium text-slate-200">Attach</h3>
                   <label
                     htmlFor="target-container"
                     className="mt-2 block text-[13px] font-medium text-slate-300"
@@ -436,9 +498,7 @@ export function OpsConsolePage() {
 
                 <div data-tour="console-containers">
                   <div className="flex items-center justify-between">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                      02 — Detected Containers
-                    </p>
+                    <h3 className="text-sm font-medium text-slate-200">Containers</h3>
                     <button
                       type="button"
                       onClick={() => containers.refetch()}
@@ -494,69 +554,30 @@ export function OpsConsolePage() {
                           </button>
                         </p>
                       ) : (
-                      <ul className="mt-2 space-y-1.5">
-                      {visibleContainers.map((c) => {
-                        const running = c.status.toLowerCase().includes('run');
-                        const isAttached = attached === c.name;
-                        return (
-                          <li
-                            key={c.name}
-                            className={`rounded-lg border p-2.5 transition-colors duration-200 ${
-                              isAttached
-                                ? 'border-emerald-400/40 bg-emerald-400/[0.04]'
-                                : 'border-slate-800 bg-slate-950 hover:border-slate-700'
-                            }`}
-                          >
-                            <span className="flex items-center gap-2">
-                              <span
-                                aria-hidden
-                                className={`h-1.5 w-1.5 flex-none rounded-full ${
-                                  running ? 'bg-emerald-400' : 'bg-slate-600'
-                                }`}
-                              />
-                              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-slate-100">
-                                {c.name}
-                              </span>
-                              <span
-                                className={`flex-none rounded px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide ${
-                                  running
-                                    ? 'bg-emerald-400/10 text-emerald-300'
-                                    : 'bg-slate-800 text-slate-400'
-                                }`}
-                              >
-                                {c.status.toUpperCase() || 'UNKNOWN'}
-                              </span>
-                            </span>
-                            <span className="mt-1 block truncate font-mono text-[11px] text-slate-500">
-                              {c.health ? `health:${c.health}` : 'health:—'}
-                              {c.project ? ` · ${c.project}` : ''}
-                              {c.short_id ? ` · ${c.short_id}` : ''}
-                            </span>
-                            <span className="mt-2 flex gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => attach(c.name)}
-                                className="flex min-h-[36px] flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-slate-700 px-2 text-xs font-medium text-slate-200 transition-colors duration-200 hover:border-slate-500 hover:bg-slate-800"
-                              >
-                                <Terminal className="h-3.5 w-3.5" aria-hidden />
-                                View Logs
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setAttached(c.name);
-                                  void diagnoseContainer(c.name, c.project);
-                                }}
-                                className="flex min-h-[36px] flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-emerald-500/40 px-2 text-xs font-medium text-emerald-300 transition-colors duration-200 hover:bg-emerald-400/10"
-                              >
-                                <Stethoscope className="h-3.5 w-3.5" aria-hidden />
-                                Diagnose
-                              </button>
-                            </span>
-                          </li>
-                        );
-                      })}
-                      </ul>
+                      <div className="mt-2 space-y-3">
+                      {containerGroups.map((group) => (
+                        <div key={group.project}>
+                          {containerGroups.length > 1 && (
+                            <p className="font-mono text-[11px] text-slate-500">{group.project}</p>
+                          )}
+                          {group.active.length > 0 && (
+                            <ul className="divide-y divide-slate-800/70">
+                              {group.active.map((c) => containerRow(c))}
+                            </ul>
+                          )}
+                          {group.exited.length > 0 && (
+                            <details className="mt-1">
+                              <summary className="min-h-[32px] cursor-pointer py-1 text-xs text-slate-500 transition-colors duration-200 hover:text-slate-200">
+                                Exited ({group.exited.length})
+                              </summary>
+                              <ul className="divide-y divide-slate-800/70">
+                                {group.exited.map((c) => containerRow(c))}
+                              </ul>
+                            </details>
+                          )}
+                        </div>
+                      ))}
+                      </div>
                       )}
                     </>
                   )}
@@ -654,7 +675,7 @@ export function OpsConsolePage() {
                   {busy === 'copilot' ? 'Asking…' : 'Ask'}
                 </button>
                 {copilotOut && (
-                  <div className="rounded-lg border border-slate-800 border-l-2 border-l-emerald-400 bg-slate-950 p-3 text-sm">
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-sm">
                     <p className="leading-relaxed text-slate-100">{copilotOut.answer}</p>
                     <p className="mt-2 font-mono text-[11px] leading-relaxed text-slate-500">
                       {copilotOut.actual_model || '—'} · {copilotOut.total_tokens} tokens
@@ -715,7 +736,7 @@ export function OpsConsolePage() {
               </span>
             )}
             <label className="flex items-center gap-1 font-mono text-[11px] text-slate-500">
-              tail
+              lines
               <select
                 value={tail}
                 onChange={(e) => setTail(Number(e.target.value))}
@@ -811,9 +832,7 @@ export function OpsConsolePage() {
           aria-label="Incident diagnostic"
         >
           <div className="border-b border-slate-800/80 bg-slate-950/60 px-4 py-3">
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
-              Diagnostic
-            </p>
+            <h2 className="text-sm font-medium text-slate-200">Diagnostic</h2>
             <h2 className="mt-0.5 text-sm font-semibold tracking-tight text-slate-100">
               {madeIncident ? (
                 <>Incident · <span className="font-mono text-[13px]">{madeIncident.title}</span></>
@@ -829,7 +848,7 @@ export function OpsConsolePage() {
                   Diagnose a log tail on the left and the incident lands here — with its
                   AI investigation and downloadable report. Nothing runs until you ask.
                 </p>
-                <p className="font-mono text-[11px] leading-relaxed text-slate-600">
+                <p className="text-[11px] leading-relaxed text-slate-600">
                   states: recorded → investigating → completed / failed
                 </p>
               </>

@@ -67,6 +67,8 @@ test.describe('product tour (desktop)', () => {
     await mockApi(page);
     await page.goto('/overview');
     const { button, popover } = await startTour(page);
+    await expect(popover.getByText('What is DeployIQ')).toBeVisible();
+    await popover.getByRole('button', { name: 'Next' }).click();
     await expect(popover.getByText('Navigate DeployIQ')).toBeVisible();
     await popover.getByRole('button', { name: 'Next' }).click();
     await expect(popover.getByText('Collector status')).toBeVisible();

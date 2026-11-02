@@ -70,7 +70,7 @@ describe('OpsConsolePage', () => {
   it('shows header pills, tabs, and attach controls', async () => {
     mockApi();
     renderPage();
-    expect(await screen.findByText(/Autonomous SRE Agent/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Operations console' })).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: 'Console input' })).toBeInTheDocument();
     expect(screen.getByLabelText('Target Container:')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Attach & Stream' })).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe('OpsConsolePage', () => {
   it('exposes manual and copilot tabs without fake actions', async () => {
     mockApi();
     renderPage();
-    await screen.findByText(/Autonomous SRE Agent/);
+    await screen.findByRole('heading', { name: 'Operations console' });
     fireEvent.click(screen.getByRole('button', { name: 'Manual Logs' }));
     expect(await screen.findByLabelText('Raw logs to analyze')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'SRE Copilot' }));
@@ -92,7 +92,7 @@ describe('OpsConsolePage', () => {
       body: { model: 'a:free', ok: true, actual_model: 'a:free', latency_ms: 420 },
     }));
     renderPage();
-    await screen.findByText(/Autonomous SRE Agent/);
+    await screen.findByRole('heading', { name: 'Operations console' });
     // First model is pinged automatically on mount.
     expect(await screen.findByText('live · 420ms')).toBeInTheDocument();
     expect(calls.some((c) => c.url.includes('/models/check') && c.body.includes('a:free'))).toBe(true);
@@ -108,7 +108,7 @@ describe('OpsConsolePage', () => {
   it('turns the engine pill red when the picked model is down', async () => {
     mockApiWithCheck(() => ({ status: 502, body: { detail: 'model check failed: timeout' } }));
     renderPage();
-    await screen.findByText(/Autonomous SRE Agent/);
+    await screen.findByRole('heading', { name: 'Operations console' });
     expect(await screen.findByText('down')).toBeInTheDocument();
   });
 

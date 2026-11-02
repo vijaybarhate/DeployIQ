@@ -31,18 +31,19 @@ function renderPage() {
   );
 }
 
+const HEALTHY = { ok: true, service: 'x', docker: { connected: true, version: '29.8.2' } };
+
 describe('OverviewPage empty state keeps collector status visible', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('shows connected collector with zero incidents', async () => {
-    mockApi([], { ok: true, service: 'x', docker: { connected: true, version: '29.8.2' } });
+  it('shows all-clear with connected collector and zero incidents', async () => {
+    mockApi([], HEALTHY);
     renderPage();
     expect(await screen.findByText('No incidents yet')).toBeInTheDocument();
-    expect(await screen.findByText(/connected/)).toBeInTheDocument();
-    // Zero-valued metrics stay visible rather than hiding the dashboard.
-    expect(screen.getByText('Loaded incidents')).toBeInTheDocument();
+    expect(await screen.findByText(/All clear/)).toBeInTheDocument();
+    expect(await screen.findByText(/Docker connected/)).toBeInTheDocument();
   });
 
   it('shows disconnected collector with zero incidents', async () => {
@@ -53,10 +54,24 @@ describe('OverviewPage empty state keeps collector status visible', () => {
     expect(await screen.findByText(/daemon down/)).toBeInTheDocument();
   });
 
-  it('explains the product on first impression', async () => {
-    mockApi([], { ok: true, service: 'x', docker: { connected: true } });
+  it('links the open count to the incident center', async () => {
+    mockApi(
+      [
+        {
+          id: 'a',
+          title: 'ZeroDivisionError: division by zero',
+          status: 'open',
+          project_id: 'demo',
+          source: 'docker',
+          severity: 'high',
+          last_seen: '2026-01-03T00:00:00',
+          observation_count: 2,
+        },
+      ],
+      HEALTHY,
+    );
     renderPage();
-    expect(await screen.findByText('What am I looking at?')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View incidents' })).toHaveAttribute('href', '/incidents');
+    const link = await screen.findByRole('link', { name: '1 open' });
+    expect(link).toHaveAttribute('href', '/incidents');
   });
 });

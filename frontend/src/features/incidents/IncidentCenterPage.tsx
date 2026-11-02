@@ -2,12 +2,24 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 
 import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/states';
-import { SeverityBadge, SourceBadge, StatusBadge } from '../../components/ui/Badges';
 import { useIncidents } from '../../hooks/queries';
 import { filterAndSortIncidents, type IncidentFilter, type IncidentSort } from '../../lib/incidents';
 import { formatDateTime } from '../../lib/time';
 
 const EMPTY_FILTER: IncidentFilter = { query: '', source: 'all', status: 'all', sort: 'newest' };
+
+const SEVERITY_DOT: Record<string, string> = {
+  critical: 'bg-red-400',
+  high: 'bg-orange-400',
+  medium: 'bg-amber-400',
+  low: 'bg-slate-500',
+};
+
+function sourceLabel(value: string): string {
+  if (value === 'github_actions') return 'GitHub Actions';
+  if (value === 'docker') return 'Docker';
+  return value;
+}
 
 const SORT_LABELS: Record<IncidentSort, string> = {
   newest: 'Newest first',
@@ -38,11 +50,8 @@ export function IncidentCenterPage() {
   return (
     <div className="space-y-4">
       <div>
-        <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-emerald-400">
-          DeployIQ // Triage
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-50">Incident Center</h1>
-        <p className="mt-1 text-sm tabular-nums text-slate-400">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-50">Incident Center</h1>
+        <p className="mt-1 text-sm text-slate-400">
           Latest {incidents.data?.length ?? 0} incidents. Search and filters apply to the loaded
           collection.
         </p>
@@ -101,33 +110,41 @@ export function IncidentCenterPage() {
         <EmptyState title="No incidents match" hint="Adjust the search, filters, or sorting." />
       ) : (
         <div data-tour="center-table" className="overflow-x-auto rounded-xl border border-slate-800 bg-[#0a0f1a]">
-          <table className="w-full min-w-[720px] divide-y divide-slate-800/80 text-left text-sm">
+          <table className="w-full min-w-[720px] divide-y divide-slate-800/80 text-left text-[13px]">
             <thead>
-              <tr className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                <th scope="col" className="px-4 py-2.5 font-medium">Incident</th>
-                <th scope="col" className="px-4 py-2.5 font-medium">Project</th>
-                <th scope="col" className="px-4 py-2.5 font-medium">Source</th>
-                <th scope="col" className="px-4 py-2.5 font-medium">Severity</th>
-                <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
-                <th scope="col" className="px-4 py-2.5 font-medium">Obs.</th>
-                <th scope="col" className="px-4 py-2.5 font-medium">Last seen</th>
+              <tr className="text-xs font-medium text-slate-500">
+                <th scope="col" className="px-3 py-2 font-medium">Incident</th>
+                <th scope="col" className="px-3 py-2 font-medium">Project</th>
+                <th scope="col" className="px-3 py-2 font-medium">Source</th>
+                <th scope="col" className="px-3 py-2 font-medium">Severity</th>
+                <th scope="col" className="px-3 py-2 font-medium">Status</th>
+                <th scope="col" className="px-3 py-2 font-medium">Obs.</th>
+                <th scope="col" className="px-3 py-2 font-medium">Last seen</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {rows.map((i) => (
                 <tr key={i.id} className="transition-colors duration-150 hover:bg-slate-800/30">
-                  <td className="max-w-[320px] px-4 py-2.5">
+                  <td className="max-w-[320px] px-3 py-2">
                     <Link to={`/incidents/${i.id}`} className="font-medium tracking-tight text-slate-100 underline-offset-4 hover:underline">
                       {i.title}
                     </Link>
                     <p className="truncate font-mono text-[11px] text-slate-500">{i.error_signature}</p>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-2.5 font-mono text-[13px] text-slate-300">{i.project_id}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5"><SourceBadge value={i.source} /></td>
-                  <td className="whitespace-nowrap px-4 py-2.5"><SeverityBadge value={i.severity} /></td>
-                  <td className="whitespace-nowrap px-4 py-2.5"><StatusBadge value={i.status} /></td>
-                  <td className="px-4 py-2.5 tabular-nums text-slate-300">{i.observation_count}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs tabular-nums text-slate-400">{formatDateTime(i.last_seen)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-300">{i.project_id}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-400">{sourceLabel(i.source)}</td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <span className="flex items-center gap-1.5 text-xs text-slate-300">
+                      <span
+                        aria-hidden
+                        className={`h-1.5 w-1.5 rounded-full ${SEVERITY_DOT[i.severity?.toLowerCase() ?? ''] ?? 'bg-slate-500'}`}
+                      />
+                      {i.severity ?? 'unclassified'}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-300">{i.status}</td>
+                  <td className="px-3 py-2 tabular-nums text-slate-300">{i.observation_count}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs tabular-nums text-slate-400">{formatDateTime(i.last_seen)}</td>
                 </tr>
               ))}
             </tbody>

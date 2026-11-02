@@ -11,6 +11,12 @@ export type TourRoute = 'overview' | 'console' | 'incidents' | 'incident-details
 
 const OVERVIEW_STEPS: TourStep[] = [
   {
+    element: '[data-tour="overview-intro"]',
+    title: 'What is DeployIQ',
+    description:
+      'Watch tails your containers, Group merges repeat crashes into one incident, Explain runs the AI investigation.',
+  },
+  {
     element: '[data-tour="tour-nav"]',
     title: 'Navigate DeployIQ',
     description: 'Overview for status, Ops Console for live Docker work, Incident Center for triage.',
@@ -52,7 +58,7 @@ const CONSOLE_STEPS: TourStep[] = [
   {
     element: '[data-tour="console-containers"]',
     title: 'Detected containers',
-    description: 'Every container the daemon reports. View Logs to stream, Diagnose to record an incident straight from the tail.',
+    description: 'Every container the daemon reports. View logs to stream, Diagnose to record an incident straight from the tail.',
   },
   {
     element: '[data-tour="console-terminal"]',
