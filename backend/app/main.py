@@ -8,9 +8,11 @@ from fastapi import FastAPI
 
 from app.api.routes import copilot, docker, health, incidents, investigations, models
 from app.config import get_settings
-from app.core.logging import setup_logging
+from app.core.logging import get_logger, setup_logging
 from app.db.models.investigation import Investigation
 from app.db.session import SessionLocal
+
+log = get_logger(__name__)
 
 
 def _recover_interrupted() -> None:
@@ -52,6 +54,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     setup_logging(settings.log_level)
+    # Count only: key material must never reach logs.
+    log.info("OpenRouter key pool: %d key(s) configured", len(settings.openrouter_api_keys))
     app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(incidents.router, prefix="/api/v1")

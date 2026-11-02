@@ -1,5 +1,6 @@
 """Centralized configuration. Secrets come from the environment / .env only."""
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -56,6 +57,24 @@ class Settings(BaseSettings):
     @property
     def fallback_model_list(self) -> list[str]:
         return [m.strip() for m in self.openrouter_fallback_models.split(",") if m.strip()]
+
+    @property
+    def openrouter_api_keys(self) -> list[str]:
+        """Pooled OpenRouter keys: OPENROUTER_API_KEY, then _1.._9.
+
+        Health checks fail over across keys on rate limits, so one
+        exhausted key never hides a model that other keys can still reach.
+        Order is stable and deduplicated; never log the values.
+        """
+        keys: list[str] = []
+        candidates = [self.openrouter_api_key] + [
+            os.environ.get(f"OPENROUTER_API_KEY{i}", "") for i in range(1, 10)
+        ]
+        for raw in candidates:
+            cleaned = (raw or "").strip()
+            if cleaned and cleaned not in keys:
+                keys.append(cleaned)
+        return keys
 
 
 @lru_cache

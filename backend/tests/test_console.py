@@ -373,6 +373,111 @@ def _status_catalog(monkeypatch):
     return entries
 
 
+def _pooled_settings(monkeypatch, keys):
+    import types
+
+    model_service.clear_catalog_cache()
+    fake = types.SimpleNamespace(
+        openrouter_api_key=keys[0] if keys else "",
+        openrouter_api_keys=list(keys),
+        openrouter_model="",
+        openrouter_base_url="https://openrouter.ai/api/v1",
+        openrouter_timeout_seconds=5.0,
+    )
+    monkeypatch.setattr(model_service, "get_settings", lambda: fake)
+    return fake
+
+
+def test_check_fails_over_to_next_key_on_rate_limit(monkeypatch, _verified_catalog):
+    import asyncio
+
+    from app.llm.base import LLMCompletion, LLMError, LLMErrorCode, TokenUsage
+
+    _pooled_settings(monkeypatch, ["k1", "k2"])
+    model_service._reset_key_rotation()
+    seen: list[str] = []
+
+    class _FakeProvider:
+        def __init__(self, **kwargs):
+            self._key = kwargs.get("api_key", "")
+
+        async def complete_json(self, system_prompt, user_prompt):
+            seen.append(self._key)
+            if self._key == "k1":
+                raise LLMError(LLMErrorCode.RATE_LIMITED, "limited")
+            return LLMCompletion(
+                parsed={"ok": True}, actual_model="m:free", usage=TokenUsage(), latency_ms=10
+            )
+
+    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FakeProvider)
+    out = asyncio.run(model_service.check_model("m:free"))
+    assert out["ok"] is True
+    assert seen[0] == "k1" and seen[-1] == "k2"  # exhausted key skipped, next key answered
+
+
+def test_check_reports_all_keys_exhausted(monkeypatch, _verified_catalog):
+    import asyncio
+
+    import pytest as _pytest
+
+    from app.llm.base import LLMError, LLMErrorCode
+
+    _pooled_settings(monkeypatch, ["k1", "k2"])
+    model_service._reset_key_rotation()
+
+    class _FailingProvider:
+        def __init__(self, **kwargs):
+            pass
+
+        async def complete_json(self, system_prompt, user_prompt):
+            raise LLMError(LLMErrorCode.RATE_LIMITED, "limited")
+
+    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FailingProvider)
+    with _pytest.raises(LLMError) as excinfo:
+        asyncio.run(model_service.check_model("m:free"))
+    assert excinfo.value.code == LLMErrorCode.RATE_LIMITED
+    assert "all 2 keys" in str(excinfo.value)
+
+
+def test_key_rotation_spreads_load(monkeypatch, _verified_catalog):
+    import asyncio
+
+    from app.llm.base import LLMCompletion, TokenUsage
+
+    _pooled_settings(monkeypatch, ["k1", "k2", "k3"])
+    model_service._reset_key_rotation()
+    seen: list[str] = []
+
+    class _FakeProvider:
+        def __init__(self, **kwargs):
+            self._key = kwargs.get("api_key", "")
+
+        async def complete_json(self, system_prompt, user_prompt):
+            seen.append(self._key)
+            return LLMCompletion(
+                parsed={"ok": True}, actual_model="m:free", usage=TokenUsage(), latency_ms=10
+            )
+
+    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FakeProvider)
+    asyncio.run(model_service.check_model("m:free"))
+    asyncio.run(model_service.check_model("m:free"))
+    asyncio.run(model_service.check_model("m:free"))
+    assert seen == ["k1", "k2", "k3"]
+
+
+def test_api_keys_property_collects_numbered_keys(monkeypatch):
+    from app.config import Settings
+
+    # Real environ beats the repo .env file, so this is deterministic.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "")
+    monkeypatch.setenv("OPENROUTER_API_KEY1", "aaa")
+    monkeypatch.setenv("OPENROUTER_API_KEY2", "aaa")  # duplicate collapses
+    monkeypatch.setenv("OPENROUTER_API_KEY3", "bbb")
+    for i in range(4, 10):
+        monkeypatch.delenv(f"OPENROUTER_API_KEY{i}", raising=False)
+    assert Settings().openrouter_api_keys == ["aaa", "bbb"]
+
+
 def test_models_status_ranks_live_first(monkeypatch):
     from app.llm.base import LLMCompletion, LLMError, LLMErrorCode, TokenUsage
 
