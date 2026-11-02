@@ -63,6 +63,7 @@ export function IncidentCenterPage() {
       <div className="flex flex-wrap gap-2">
         <input
           value={filter.query}
+          name="incident-search"
           onChange={(e) => set('query', e.target.value)}
           placeholder="Search title, signature, or project…"
           aria-label="Search incidents"
@@ -71,6 +72,7 @@ export function IncidentCenterPage() {
         />
         <select
           value={filter.source}
+          name="incident-source"
           onChange={(e) => set('source', e.target.value as IncidentFilter['source'])}
           aria-label="Filter by source"
           data-tour="center-source"
@@ -82,6 +84,7 @@ export function IncidentCenterPage() {
         </select>
         <select
           value={filter.status}
+          name="incident-status"
           onChange={(e) => set('status', e.target.value as IncidentFilter['status'])}
           aria-label="Filter by status"
           data-tour="center-status"
@@ -94,6 +97,7 @@ export function IncidentCenterPage() {
         </select>
         <select
           value={filter.sort}
+          name="incident-sort"
           onChange={(e) => set('sort', e.target.value as IncidentSort)}
           aria-label="Sort incidents"
           data-tour="center-sort"

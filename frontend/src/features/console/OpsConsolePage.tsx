@@ -667,6 +667,7 @@ export function OpsConsolePage() {
                   <div className="mt-1.5 flex gap-2">
                     <input
                       id="target-container"
+                      name="target-container"
                       value={target}
                       onChange={(e) => setTarget(e.target.value)}
                       onKeyDown={(e) => {
@@ -680,7 +681,7 @@ export function OpsConsolePage() {
                     <button
                       type="button"
                       onClick={() => attach(target)}
-                      className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                      className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Attach &amp; Stream
                       <ArrowRight className="h-4 w-4" aria-hidden />
@@ -724,6 +725,7 @@ export function OpsConsolePage() {
                         <input
                           type="search"
                           aria-label="Search containers"
+                          name="container-filter"
                           value={containerQuery}
                           onChange={(e) => setContainerQuery(e.target.value)}
                           placeholder="Filter by name, status, project…"
@@ -783,9 +785,7 @@ export function OpsConsolePage() {
             {tab === 'manual' && (
               <div className="space-y-3">
                 <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-                    Paste logs manually
-                  </p>
+                  <h3 className="text-sm font-medium text-ink">Paste logs manually</h3>
                   <p className="mt-1.5 text-xs leading-relaxed text-muted">
                     Same evidence extractor as the Docker watcher. Needs a real traceback / OOM /
                     exit-code line — plain “hello” is rejected with 422.
@@ -795,6 +795,7 @@ export function OpsConsolePage() {
                   <label className="text-xs font-medium text-body">
                     Project
                     <input
+                      name="manual-project"
                       value={manualProject}
                       onChange={(e) => setManualProject(e.target.value)}
                       placeholder="deployiq-demo"
@@ -806,6 +807,7 @@ export function OpsConsolePage() {
                   <label className="text-xs font-medium text-body">
                     Container <span className="font-normal text-muted">(optional)</span>
                     <input
+                      name="manual-container"
                       value={manualContainer}
                       onChange={(e) => setManualContainer(e.target.value)}
                       placeholder="crashme-1"
@@ -817,6 +819,7 @@ export function OpsConsolePage() {
                 </div>
                 <textarea
                   aria-label="Raw logs to analyze"
+                  name="manual-logs"
                   value={manualText}
                   onChange={(e) => setManualText(e.target.value)}
                   rows={9}
@@ -838,15 +841,14 @@ export function OpsConsolePage() {
             {tab === 'copilot' && (
               <div className="space-y-3">
                 <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-                    Ask SRE Copilot
-                  </p>
+                  <h3 className="text-sm font-medium text-ink">Ask SRE Copilot</h3>
                   <p className="mt-1.5 text-xs leading-relaxed text-muted">
                     Stateless Q&amp;A grounded in runbooks + optional incident. No actions are taken.
                   </p>
                 </div>
                 <input
                   aria-label="Incident ID (optional)"
+                  name="copilot-incident"
                   value={copilotIncident}
                   onChange={(e) => setCopilotIncident(e.target.value)}
                   placeholder="Incident ID (optional)"
@@ -856,6 +858,7 @@ export function OpsConsolePage() {
                 />
                 <textarea
                   aria-label="Question for copilot"
+                  name="copilot-question"
                   value={copilotQ}
                   onChange={(e) => setCopilotQ(e.target.value)}
                   rows={4}
@@ -935,6 +938,8 @@ export function OpsConsolePage() {
               lines
               <select
                 value={tail}
+                name="tail-lines"
+                aria-label="Log lines to show"
                 onChange={(e) => setTail(Number(e.target.value))}
                 className="cursor-pointer rounded-md border border-hairline bg-raised px-1.5 py-1 text-[11px] text-ink"
               >
@@ -1068,7 +1073,7 @@ export function OpsConsolePage() {
                     type="button"
                     onClick={() => runInvestigation(madeIncident.id)}
                     disabled={busy === 'investigate' || historyActive}
-                    className="ml-auto flex min-h-[40px] cursor-pointer items-center rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                    className="ml-auto flex min-h-[40px] cursor-pointer items-center rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {busy === 'investigate'
                       ? 'Starting…'
