@@ -31,6 +31,24 @@ async def list_models() -> list[FreeModel]:
     return [FreeModel(id=e["id"], name=e["name"]) for e in items]
 
 
+class ModelStatus(BaseModel):
+    id: str
+    name: str
+    status: str = Field(description="live | limited | slow | down")
+    latency_ms: int | None = None
+    reason: str = ""
+
+
+@router.get("/status", response_model=list[ModelStatus])
+async def model_statuses(refresh: bool = False) -> list[ModelStatus]:
+    """Live availability for every verified model, cheapest-first.
+
+    Cached briefly to protect free-tier quota; refresh=true re-pings.
+    """
+    items = await model_service.list_model_statuses(refresh=refresh)
+    return [ModelStatus(**e) for e in items]
+
+
 @router.post("/check", response_model=CheckResponse)
 async def check_model(payload: CheckRequest) -> CheckResponse:
     """Ping one explicit free model; proves the picker selection is live."""

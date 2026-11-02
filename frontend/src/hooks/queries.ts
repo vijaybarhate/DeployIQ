@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { checkModel, containerLogs, listContainers, listModels } from '../lib/api/console';
+import { checkModel, containerLogs, listContainers, listModels, listModelStatuses } from '../lib/api/console';
 import { getHealth, getIncident, listIncidents } from '../lib/api/incidents';
 import { listInvestigations, triggerInvestigation } from '../lib/api/investigations';
 import type { Investigation } from '../types/api';
@@ -70,7 +70,7 @@ export function useContainerLogs(name: string | null, tail = 200) {
   });
 }
 
-export type ModelStatus = 'idle' | 'checking' | 'live' | 'down';
+export type ModelStatus = 'idle' | 'checking' | 'live' | 'limited' | 'slow' | 'down';
 
 export interface ModelHealth {
   status: ModelStatus;
@@ -80,6 +80,34 @@ export interface ModelHealth {
 }
 
 const IDLE_HEALTH: ModelHealth = { status: 'idle', actualModel: '', latencyMs: null, error: null };
+
+/** Bulk availability for every verified model (cached server-side to protect quota). */
+export function useModelStatuses() {
+  return useQuery({
+    queryKey: ['model-statuses'],
+    queryFn: () => listModelStatuses(),
+    staleTime: 120_000,
+    refetchInterval: 120_000,
+    retry: false,
+  });
+}
+
+/**
+ * Map a failed check to the honest reason. The backend reports the provider
+ * code in the error detail ("model check failed: rate_limited"), so a
+ * limited model is never mislabeled as dead.
+ */
+function healthFromError(err: unknown): ModelHealth {
+  const message = err instanceof Error ? err.message : '';
+  const code = /:\s*([a-z_]+)\s*$/.exec(message)?.[1] ?? '';
+  if (code === 'rate_limited') {
+    return { status: 'limited', actualModel: '', latencyMs: null, error: 'rate limited — retry later' };
+  }
+  if (code === 'timeout') {
+    return { status: 'slow', actualModel: '', latencyMs: null, error: 'timed out' };
+  }
+  return { status: 'down', actualModel: '', latencyMs: null, error: message || 'check failed' };
+}
 
 /** Live health of one engine pick: pings the backend check on every change. */
 export function useModelStatus(model: string): ModelHealth {
@@ -112,15 +140,7 @@ export function useModelStatus(model: string): ModelHealth {
       },
       (err: unknown) => {
         if (cancelled) return;
-        setSettled({
-          forModel: id,
-          health: {
-            status: 'down',
-            actualModel: '',
-            latencyMs: null,
-            error: err instanceof Error ? err.message : 'check failed',
-          },
-        });
+        setSettled({ forModel: id, health: healthFromError(err) });
       },
     );
     return () => {

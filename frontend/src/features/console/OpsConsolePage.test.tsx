@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,12 +20,21 @@ function mockApi() {
   );
 }
 
-function mockApiWithCheck(check: (url: string, init?: RequestInit) => { status: number; body: unknown }) {
+function mockApiWithCheck(
+  check: (url: string, init?: RequestInit) => { status: number; body: unknown },
+  statuses: unknown[] = [
+    { id: 'a:free', name: 'A', status: 'live', latency_ms: 420, reason: '' },
+    { id: 'b:free', name: 'B', status: 'down', latency_ms: null, reason: 'x' },
+  ],
+) {
   const calls: Array<{ url: string; body: string }> = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.includes('/models/status')) {
+        return { ok: true, status: 200, statusText: 'OK', json: async () => statuses } as Response;
+      }
       if (url.includes('/models/check')) {
         calls.push({ url, body: String(init?.body ?? '') });
         const { status, body } = check(url, init);
@@ -38,10 +47,12 @@ function mockApiWithCheck(check: (url: string, init?: RequestInit) => { status: 
       }
       let body: unknown = {};
       if (url.includes('/healthz')) body = { ok: true, service: 'x', docker: { connected: true } };
+      // Catalogue order is deliberately worst-first: the picker must still
+      // default to the fastest LIVE model from the status ranking.
       else if (url.includes('/models'))
         body = [
-          { id: 'a:free', name: 'A' },
           { id: 'b:free', name: 'B' },
+          { id: 'a:free', name: 'A' },
         ];
       else if (url.includes('/docker/containers')) body = [];
       if (url.includes('/logs')) body = { name: 'c', lines: [], truncated: false };
@@ -86,27 +97,43 @@ describe('OpsConsolePage', () => {
     expect(await screen.findByLabelText('Question for copilot')).toBeInTheDocument();
   });
 
-  it('auto-verifies the picked engine and shows the live verdict', async () => {
-    const calls = mockApiWithCheck(() => ({
-      status: 200,
-      body: { model: 'a:free', ok: true, actual_model: 'a:free', latency_ms: 420 },
-    }));
+  it('defaults to the fastest live model and shows the live verdict', async () => {
+    const calls = mockApiWithCheck((_url, init) => {
+      const body = String(init?.body ?? '');
+      if (body.includes('a:free')) {
+        return {
+          status: 200,
+          body: { model: 'a:free', ok: true, actual_model: 'a:free', latency_ms: 420 },
+        };
+      }
+      return { status: 502, body: { detail: 'model check failed: timeout' } };
+    });
     renderPage();
     await screen.findByRole('heading', { name: 'Operations console' });
-    // First model is pinged automatically on mount.
+    // Auto-pick skipped catalogue-first b:free and verified a:free instead.
     expect(await screen.findByText('live · 420ms')).toBeInTheDocument();
     expect(calls.some((c) => c.url.includes('/models/check') && c.body.includes('a:free'))).toBe(true);
-    // Picking another model pings that model instead.
-    fireEvent.change(screen.getByLabelText('AI engine (free models only)'), {
-      target: { value: 'b:free' },
-    });
+    // Ranked dropdown: live first, down last.
+    fireEvent.click(screen.getByRole('button', { name: 'AI engine (free models only)' }));
+    const options = within(screen.getByRole('listbox')).getAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual([
+      expect.stringContaining('A'),
+      expect.stringContaining('B'),
+    ]);
+    // Picking the down model pings it and flips the pill to slow (timeout).
+    const listbox = screen.getByRole('listbox');
+    const bOption = within(listbox).getByRole('option', { name: /B/ });
+    fireEvent.click(within(bOption).getByRole('button'));
     await waitFor(() => {
       expect(calls.some((c) => c.url.includes('/models/check') && c.body.includes('b:free'))).toBe(true);
     });
+    expect(await screen.findByText('slow')).toBeInTheDocument();
   });
 
   it('turns the engine pill red when the picked model is down', async () => {
-    mockApiWithCheck(() => ({ status: 502, body: { detail: 'model check failed: timeout' } }));
+    mockApiWithCheck(() => ({ status: 502, body: { detail: 'model check failed: auth' } }), [
+      { id: 'b:free', name: 'B', status: 'down', latency_ms: null, reason: 'auth' },
+    ]);
     renderPage();
     await screen.findByRole('heading', { name: 'Operations console' });
     expect(await screen.findByText('down')).toBeInTheDocument();

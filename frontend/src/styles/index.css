@@ -67,6 +67,9 @@ body {
 .log-line:nth-child(odd) {
   background: rgba(148, 163, 184, 0.04);
 }
+.log-line:hover {
+  background: rgba(52, 211, 153, 0.06);
+}
 
 /* Scanline texture for the terminal pane (pure CSS, zero JS cost) */
 .terminal-grid {

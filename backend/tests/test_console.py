@@ -357,6 +357,67 @@ def test_models_check_provider_failure_is_502(monkeypatch, _verified_catalog):
     assert r.status_code == 502, r.text
 
 
+def _status_catalog(monkeypatch):
+    entries = [
+        _free_entry("m-fast:free", "Fast"),
+        _free_entry("m-limited:free", "Limited"),
+        _free_entry("m-slow:free", "Slow"),
+        _free_entry("m-dead:free", "Dead"),
+    ]
+
+    async def _fake(*args, **kwargs):
+        return [dict(e) for e in entries]
+
+    model_service.clear_catalog_cache()
+    monkeypatch.setattr(model_service, "fetch_catalog", _fake)
+    return entries
+
+
+def test_models_status_ranks_live_first(monkeypatch):
+    from app.llm.base import LLMCompletion, LLMError, LLMErrorCode, TokenUsage
+
+    _status_catalog(monkeypatch)
+    calls: list[str] = []
+
+    class _FakeProvider:
+        def __init__(self, **kwargs):
+            self._model = kwargs.get("model", "")
+
+        async def complete_json(self, system_prompt, user_prompt):
+            calls.append(self._model)
+            if self._model == "m-fast:free":
+                return LLMCompletion(
+                    parsed={"ok": True},
+                    actual_model="m-fast:free",
+                    usage=TokenUsage(),
+                    latency_ms=100,
+                )
+            if self._model == "m-limited:free":
+                raise LLMError(LLMErrorCode.RATE_LIMITED, "limited")
+            if self._model == "m-slow:free":
+                raise LLMError(LLMErrorCode.TIMEOUT, "slow")
+            raise LLMError(LLMErrorCode.SERVER, "down")
+
+    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FakeProvider)
+    r = client.get("/api/v1/models/status?refresh=true")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [(e["id"], e["status"]) for e in body] == [
+        ("m-fast:free", "live"),
+        ("m-limited:free", "limited"),
+        ("m-slow:free", "slow"),
+        ("m-dead:free", "down"),
+    ]
+    assert body[0]["latency_ms"] == 100
+    # Cached: second call pings nothing.
+    calls.clear()
+    r = client.get("/api/v1/models/status")
+    assert r.status_code == 200, r.text
+    assert calls == []
+    assert [(e["id"], e["status"]) for e in r.json()][0] == ("m-fast:free", "live")
+    model_service.clear_catalog_cache()
+
+
 def test_trigger_rejects_paid_model_override():
     incident_id = uuid.uuid4()
     r = client.post(

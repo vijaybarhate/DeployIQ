@@ -43,7 +43,11 @@ export function OverviewPage() {
         <p className="text-sm tabular-nums text-slate-300">
           {needsAttention ? (
             <>
-              <Link to="/incidents" className="font-semibold text-slate-100 underline-offset-4 hover:underline">
+              <span className="relative mr-1 inline-flex h-2 w-2" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              <Link to="/incidents" className="text-base font-semibold text-slate-100 underline-offset-4 hover:underline">
                 {summary.open} open
               </Link>
               {' · '}

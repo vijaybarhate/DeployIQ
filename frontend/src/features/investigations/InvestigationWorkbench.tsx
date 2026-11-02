@@ -136,7 +136,7 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
           onClick={onInvestigate}
           disabled={triggering}
           data-tour="workbench-trigger"
-          className="min-h-[44px] cursor-pointer rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-[44px] cursor-pointer rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-8px_rgba(52,211,153,0.55)] transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
         >
           {triggering ? 'Investigating…' : 'Run AI investigation'}
         </button>

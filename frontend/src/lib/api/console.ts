@@ -21,6 +21,18 @@ export function listModels(): Promise<FreeModel[]> {
   return api.get<FreeModel[]>('/models');
 }
 
+export interface ModelStatusInfo {
+  id: string;
+  name: string;
+  status: 'live' | 'limited' | 'slow' | 'down';
+  latency_ms: number | null;
+  reason: string;
+}
+
+export function listModelStatuses(refresh = false): Promise<ModelStatusInfo[]> {
+  return api.get<ModelStatusInfo[]>(`/models/status${refresh ? '?refresh=true' : ''}`);
+}
+
 export interface ModelCheck {
   model: string;
   ok: boolean;

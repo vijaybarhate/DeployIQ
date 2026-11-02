@@ -27,6 +27,9 @@ async function mockApi(page: Page) {
         json: { model: 'm:free', ok: true, actual_model: 'm:free', latency_ms: 42 },
       });
     }
+    if (url.includes('/models/status')) {
+      return route.fulfill({ json: [{ id: 'm:free', name: 'M', status: 'live', latency_ms: 42, reason: '' }] });
+    }
     if (url.endsWith('/models')) {
       return route.fulfill({ json: [{ id: 'm:free', name: 'M (free)' }] });
     }

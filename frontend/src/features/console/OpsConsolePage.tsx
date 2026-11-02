@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   ArrowRight,
   Bot,
+  ChevronDown,
   ClipboardPaste,
   Cpu,
   KeyRound,
@@ -22,6 +23,7 @@ import {
   useHealth,
   useInvestigations,
   useModels,
+  useModelStatuses,
   useModelStatus,
 } from '../../hooks/queries';
 import { useNow } from '../../hooks/useNow';
@@ -51,6 +53,39 @@ function shortModel(id: string): string {
   return tail.length > 34 ? `${tail.slice(0, 32)}…` : tail;
 }
 
+const MODEL_DOT: Record<string, string> = {
+  live: 'bg-emerald-400',
+  limited: 'bg-amber-400',
+  slow: 'bg-amber-400',
+  down: 'bg-red-400',
+  unknown: 'bg-slate-600',
+};
+
+const MODEL_TEXT: Record<string, string> = {
+  live: 'text-emerald-300',
+  limited: 'text-amber-300',
+  slow: 'text-amber-300',
+  down: 'text-red-300',
+  unknown: 'text-slate-500',
+};
+
+function engineRowDot(status: string): string {
+  return MODEL_DOT[status] ?? MODEL_DOT.unknown;
+}
+
+function engineRowText(status: string): string {
+  return MODEL_TEXT[status] ?? MODEL_TEXT.unknown;
+}
+
+function engineRowLabel(m: { status: string; latency_ms: number | null; reason: string }): string {
+  if (m.status === 'live' && typeof m.latency_ms === 'number') return `live · ${m.latency_ms}ms`;
+  if (m.status === 'live') return 'live';
+  if (m.status === 'limited') return 'limited';
+  if (m.status === 'slow') return 'timed out';
+  if (m.status === 'down') return m.reason || 'down';
+  return 'not checked';
+}
+
 export function OpsConsolePage() {
   const [tab, setTab] = useState<Tab>('live');
   const [target, setTarget] = useState('');
@@ -58,6 +93,7 @@ export function OpsConsolePage() {
   const [containerQuery, setContainerQuery] = useState('');
   const [tail, setTail] = useState(200);
   const [model, setModel] = useState(loadModel);
+  const [engineOpen, setEngineOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,33 +135,89 @@ export function OpsConsolePage() {
   }, [model]);
 
   const dockerConnected = health.data?.docker.connected ?? null;
-  const modelOptions = models.data ?? [];
-  const effectiveModel = model || models.data?.[0]?.id || '';
+  const modelOptions = useMemo(() => models.data ?? [], [models.data]);
+  const statuses = useModelStatuses();
+  // Ranked by availability then speed (backend pre-sorts); fall back to the
+  // plain catalogue while statuses load so the picker never sits empty.
+  const rankedModels = useMemo(() => {
+    const live = statuses.data;
+    if (Array.isArray(live) && live.length > 0) {
+      return live.filter((e) => e && typeof e.id === 'string');
+    }
+    return modelOptions.map((m) => ({
+      id: m.id,
+      name: m.name,
+      status: 'unknown' as const,
+      latency_ms: null as number | null,
+      reason: '',
+    }));
+  }, [statuses.data, modelOptions]);
+  const liveCount = rankedModels.filter((m) => m.status === 'live').length;
+  // Default to the fastest answering model so the first pick is usable;
+  // an explicit user pick (persisted) always wins.
+  const effectiveModel =
+    model || rankedModels.find((m) => m.status === 'live')?.id || rankedModels[0]?.id || '';
   const engineHealth = useModelStatus(effectiveModel);
+  const engineButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!engineOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (
+        engineButtonRef.current &&
+        !engineButtonRef.current.contains(el) &&
+        !el?.closest?.('[data-engine-list]')
+      ) {
+        setEngineOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setEngineOpen(false);
+        engineButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [engineOpen]);
   const engineDot =
     engineHealth.status === 'live'
       ? 'bg-emerald-400'
       : engineHealth.status === 'checking'
         ? 'bg-amber-400'
-        : engineHealth.status === 'down'
-          ? 'bg-red-400'
-          : 'bg-slate-600';
+        : engineHealth.status === 'limited' || engineHealth.status === 'slow'
+          ? 'bg-amber-400'
+          : engineHealth.status === 'down'
+            ? 'bg-red-400'
+            : 'bg-slate-600';
   const engineText =
     engineHealth.status === 'live'
       ? `live${engineHealth.latencyMs !== null ? ` · ${engineHealth.latencyMs}ms` : ''}`
       : engineHealth.status === 'checking'
         ? 'checking…'
-        : engineHealth.status === 'down'
-          ? 'down'
-          : 'not checked';
+        : engineHealth.status === 'limited'
+          ? 'limited'
+          : engineHealth.status === 'slow'
+            ? 'slow'
+            : engineHealth.status === 'down'
+              ? 'down'
+              : 'not checked';
   const engineTitle =
     engineHealth.status === 'live'
       ? `Model answered the health ping${engineHealth.actualModel ? ` as ${engineHealth.actualModel}` : ''}${engineHealth.latencyMs !== null ? ` in ${engineHealth.latencyMs}ms` : ''}.`
-      : engineHealth.status === 'down'
-        ? `Model health check failed: ${engineHealth.error ?? 'unknown error'}`
-        : engineHealth.status === 'checking'
-          ? 'Pinging the selected model…'
-          : 'Pick a model to verify it automatically.';
+      : engineHealth.status === 'limited'
+        ? 'Model is rate-limited right now — pick a live one for the demo.'
+        : engineHealth.status === 'slow'
+          ? 'Model timed out — pick a faster live one for the demo.'
+          : engineHealth.status === 'down'
+            ? `Model health check failed: ${engineHealth.error ?? 'unknown error'}`
+            : engineHealth.status === 'checking'
+              ? 'Pinging the selected model…'
+              : 'Pick a model to verify it automatically.';
 
   async function attach(name: string) {
     const cleaned = name.trim();
@@ -308,7 +400,7 @@ export function OpsConsolePage() {
               setAttached(c.name);
               void diagnoseContainer(c.name, c.project);
             }}
-            className="flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-[13px] font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-[13px] font-semibold text-slate-950 shadow-[0_0_18px_-8px_rgba(52,211,153,0.6)] transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
             <Stethoscope className="h-3.5 w-3.5" aria-hidden />
             Diagnose
@@ -353,51 +445,108 @@ export function OpsConsolePage() {
             </span>
             docker:{dockerConnected === null ? '…' : dockerConnected ? 'connected' : 'down'}
           </span>
-          <label
-            className="flex min-h-[36px] items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900 py-1 pl-2.5 pr-2.5 text-xs text-slate-300"
-            title={engineTitle}
-            data-tour="console-engine"
-          >
-            <span className="relative flex h-2 w-2" aria-hidden>
-              {(engineHealth.status === 'live' || engineHealth.status === 'checking') && (
-                <span
-                  className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 motion-reduce:animate-none ${engineDot}`}
-                />
-              )}
-              <span className={`relative inline-flex h-2 w-2 rounded-full ${engineDot}`} />
-            </span>
-            <Cpu className="h-3.5 w-3.5 text-slate-400" aria-hidden />
-            <span className="sr-only">AI engine (free models only)</span>
-            <select
+          <div className="relative" data-tour="console-engine" title={engineTitle}>
+            <button
+              ref={engineButtonRef}
+              type="button"
               aria-label="AI engine (free models only)"
-              value={effectiveModel}
-              onChange={(e) => setModel(e.target.value)}
-              className="max-w-[230px] cursor-pointer bg-transparent font-mono text-xs text-slate-100 outline-none"
-              title={effectiveModel || 'Default engine'}
+              aria-haspopup="listbox"
+              aria-expanded={engineOpen}
+              onClick={() => setEngineOpen((o) => !o)}
+              className="flex min-h-[36px] cursor-pointer items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900 py-1 pl-2.5 pr-2.5 text-xs text-slate-300 transition-colors duration-200 hover:border-slate-600"
             >
-              {modelOptions.length === 0 && <option value="">openrouter/free</option>}
-              {modelOptions.map((m) => (
-                <option key={m.id} value={m.id} className="bg-slate-900" title={m.id}>
-                  {shortModel(m.name || m.id)}
-                </option>
-              ))}
-            </select>
-            <span
-              role="status"
-              aria-live="polite"
-              className={`font-mono text-[11px] ${
-                engineHealth.status === 'live'
-                  ? 'text-emerald-300'
-                  : engineHealth.status === 'checking'
-                    ? 'text-amber-300'
-                    : engineHealth.status === 'down'
-                      ? 'text-red-300'
-                      : 'text-slate-500'
-              }`}
-            >
-              {engineText}
-            </span>
-          </label>
+              <span className="relative flex h-2 w-2" aria-hidden>
+                {(engineHealth.status === 'live' || engineHealth.status === 'checking') && (
+                  <span
+                    className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 motion-reduce:animate-none ${engineDot}`}
+                  />
+                )}
+                <span className={`relative inline-flex h-2 w-2 rounded-full ${engineDot}`} />
+              </span>
+              <Cpu className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+              <span className="max-w-[220px] truncate font-mono text-xs text-slate-100">
+                {shortModel(effectiveModel || 'openrouter/free')}
+              </span>
+              <span
+                role="status"
+                aria-live="polite"
+                className={`font-mono text-[11px] ${
+                  engineHealth.status === 'live'
+                    ? 'text-emerald-300'
+                    : engineHealth.status === 'checking'
+                      ? 'text-amber-300'
+                      : engineHealth.status === 'limited' || engineHealth.status === 'slow'
+                        ? 'text-amber-300'
+                        : engineHealth.status === 'down'
+                          ? 'text-red-300'
+                          : 'text-slate-500'
+                }`}
+              >
+                {engineText}
+              </span>
+              <ChevronDown
+                className={`h-3.5 w-3.5 text-slate-500 transition-transform duration-200 ${engineOpen ? 'rotate-180' : ''}`}
+                aria-hidden
+              />
+            </button>
+            {engineOpen && (
+              <ul
+                role="listbox"
+                aria-label="Free models by live availability"
+                data-engine-list
+                className="terminal-scroll absolute right-0 z-40 mt-2 max-h-80 w-72 overflow-auto rounded-xl border border-slate-700 bg-slate-950 p-1.5 shadow-2xl shadow-black/60"
+              >
+                {rankedModels.length === 0 && (
+                  <li className="px-3 py-2 text-xs text-slate-500">No models loaded yet…</li>
+                )}
+                {rankedModels.map((m) => (
+                  <li key={m.id} role="option" aria-selected={m.id === effectiveModel}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModel(m.id);
+                        setEngineOpen(false);
+                      }}
+                      title={m.id}
+                      className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors duration-150 ${
+                        m.id === effectiveModel ? 'bg-emerald-400/10' : 'hover:bg-slate-800/70'
+                      }`}
+                    >
+                      <span
+                        aria-hidden
+                        className={`h-1.5 w-1.5 flex-none rounded-full ${engineRowDot(m.status)}`}
+                      />
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-100">
+                        {shortModel(m.name || m.id)}
+                      </span>
+                      <span className={`flex-none font-mono text-[11px] ${engineRowText(m.status)}`}>
+                        {engineRowLabel(m)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => statuses.refetch()}
+            disabled={statuses.isFetching}
+            aria-label="Re-check all models"
+            title={
+              statuses.dataUpdatedAt
+                ? `Re-check all models (last checked ${formatClockTime(statuses.dataUpdatedAt)})`
+                : 'Check all models now'
+            }
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-slate-700/80 bg-slate-900 text-slate-400 transition-colors duration-200 hover:border-slate-600 hover:text-slate-100 disabled:cursor-wait disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${statuses.isFetching ? 'animate-spin' : ''}`} aria-hidden />
+          </button>
+          <span className="sr-only" role="status" aria-live="polite">
+            {statuses.dataUpdatedAt
+              ? `${liveCount} of ${rankedModels.length} models live`
+              : 'Model availability not checked yet'}
+          </span>
           <span
             title="The backend uses the server OPENROUTER_API_KEY. No key is typed or stored in the browser."
             className="flex min-h-[36px] cursor-help items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900 px-2.5 py-1 text-xs text-slate-400"
@@ -485,7 +634,7 @@ export function OpsConsolePage() {
                     <button
                       type="button"
                       onClick={() => attach(target)}
-                      className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-8px_rgba(52,211,153,0.55)] transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                     >
                       Attach &amp; Stream
                       <ArrowRight className="h-4 w-4" aria-hidden />
@@ -632,7 +781,7 @@ export function OpsConsolePage() {
                   type="button"
                   onClick={submitManual}
                   disabled={busy === 'manual' || !manualText.trim()}
-                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold shadow-[0_0_20px_-8px_rgba(52,211,153,0.55)] text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy === 'manual' ? 'Recording…' : 'Record incident'}
                 </button>
@@ -670,7 +819,7 @@ export function OpsConsolePage() {
                   type="button"
                   onClick={ask}
                   disabled={busy === 'copilot' || !copilotQ.trim()}
-                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold shadow-[0_0_20px_-8px_rgba(52,211,153,0.55)] text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy === 'copilot' ? 'Asking…' : 'Ask'}
                 </button>
@@ -872,7 +1021,7 @@ export function OpsConsolePage() {
                     type="button"
                     onClick={() => runInvestigation(madeIncident.id)}
                     disabled={busy === 'investigate' || historyActive}
-                    className="ml-auto flex min-h-[40px] cursor-pointer items-center rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="ml-auto flex min-h-[40px] cursor-pointer items-center rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-8px_rgba(52,211,153,0.55)] transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                   >
                     {busy === 'investigate'
                       ? 'Starting…'
