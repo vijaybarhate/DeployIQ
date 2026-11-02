@@ -15,7 +15,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 
 import { ApiError } from '../../lib/api/client';
-import { askCopilot, containerLogs, listModelStatuses, manualIngest } from '../../lib/api/console';
+import { askCopilot, containerLogs, listModelKeys, listModelStatuses, manualIngest } from '../../lib/api/console';
 import { triggerInvestigation } from '../../lib/api/investigations';
 import { formatClockTime } from '../../lib/time';
 import {
@@ -24,6 +24,7 @@ import {
   useContainerLogs,
   useHealth,
   useInvestigations,
+  useModelKeys,
   useModels,
   useModelStatuses,
   useModelStatus,
@@ -105,6 +106,9 @@ export function OpsConsolePage() {
   const [manualProject, setManualProject] = useState('');
   const [manualContainer, setManualContainer] = useState('');
   const [manualText, setManualText] = useState('');
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [keysRefreshing, setKeysRefreshing] = useState(false);
+  const keyButtonRef = useRef<HTMLButtonElement>(null);
 
   const [copilotQ, setCopilotQ] = useState('');
   const [copilotIncident, setCopilotIncident] = useState('');
@@ -152,6 +156,9 @@ export function OpsConsolePage() {
   const dockerConnected = health.data?.docker.connected ?? null;
   const modelOptions = useMemo(() => models.data ?? [], [models.data]);
   const statuses = useModelStatuses();
+  const keyStatuses = useModelKeys();
+  const liveKeys = (keyStatuses.data ?? []).filter((k) => k.status === 'live').length;
+  const totalKeys = (keyStatuses.data ?? []).length;
   // Ranked by availability then speed (backend pre-sorts); fall back to the
   // plain catalogue while statuses load so the picker never sits empty.
   const rankedModels = useMemo(() => {
@@ -268,6 +275,44 @@ export function OpsConsolePage() {
       setStatusesRefreshing(false);
     }
   }
+
+  async function refreshKeys() {
+    setKeysRefreshing(true);
+    try {
+      const fresh = await listModelKeys(true);
+      queryClient.setQueryData(['model-keys'], fresh);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Key status refresh failed');
+    } finally {
+      setKeysRefreshing(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!keyOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (
+        keyButtonRef.current &&
+        !keyButtonRef.current.contains(el) &&
+        !el?.closest?.('[data-key-list]')
+      ) {
+        setKeyOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setKeyOpen(false);
+        keyButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [keyOpen]);
   async function diagnoseContainer(name: string, project?: string) {
     setBusy('diagnose');
     setError(null);
@@ -593,13 +638,68 @@ export function OpsConsolePage() {
               ? `${liveCount} of ${rankedModels.length} models live`
               : 'Model availability not checked yet'}
           </span>
-          <span
-            title="The backend uses the server OPENROUTER_API_KEY. No key is typed or stored in the browser."
-            className="flex min-h-[36px] cursor-help items-center gap-1.5 rounded-full border border-hairline bg-panel px-2.5 py-1 text-xs text-muted"
-          >
-            <KeyRound className="h-3.5 w-3.5" aria-hidden />
-            server key
-          </span>
+          <div className="relative">
+            <button
+              ref={keyButtonRef}
+              type="button"
+              onClick={() => setKeyOpen((o) => !o)}
+              aria-label="Server API keys health"
+              aria-haspopup="dialog"
+              aria-expanded={keyOpen}
+              title="Pooled server keys — click to see which key is up or down (values never leave the backend)"
+              className="flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-full border border-hairline bg-panel px-2.5 py-1 text-xs text-muted transition-colors duration-200 hover:border-muted hover:text-ink"
+            >
+              <KeyRound className="h-3.5 w-3.5" aria-hidden />
+              {totalKeys > 0 ? `${liveKeys}/${totalKeys} keys live` : 'server keys'}
+            </button>
+            {keyOpen && (
+              <div
+                role="dialog"
+                aria-label="Server API key health"
+                data-key-list
+                className="absolute right-0 z-40 mt-2 w-64 rounded-xl border border-hairline bg-panel p-2 shadow-2xl shadow-black/60"
+              >
+                <p className="px-2.5 pb-1 pt-1.5 text-xs text-body">
+                  Pooled server keys — values never leave the backend.
+                </p>
+                {(keyStatuses.data ?? []).length === 0 && !keyStatuses.isLoading && (
+                  <p className="px-2.5 py-2 text-xs text-muted">No key status yet — checking…</p>
+                )}
+                <ul className="space-y-0.5">
+                  {(keyStatuses.data ?? []).map((k) => (
+                    <li
+                      key={k.index}
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
+                    >
+                      <span
+                        aria-hidden
+                        className={`h-1.5 w-1.5 flex-none rounded-full ${engineRowDot(k.status)}`}
+                      />
+                      <span className="font-mono text-xs text-ink">Key {k.index}</span>
+                      <span className={`ml-auto font-mono text-[11px] ${engineRowText(k.status)}`}>
+                        {k.status === 'live' && typeof k.latency_ms === 'number'
+                          ? `live · ${k.latency_ms}ms`
+                          : k.status === 'limited'
+                            ? 'limited — retry later'
+                            : k.status === 'slow'
+                              ? 'timed out'
+                              : k.reason || k.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => void refreshKeys()}
+                  disabled={keysRefreshing || keyStatuses.isFetching}
+                  className="mt-1 flex min-h-[36px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-hairline px-3 text-xs font-medium text-body transition-colors duration-200 hover:border-muted hover:text-ink disabled:cursor-wait disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${keysRefreshing ? 'animate-spin' : ''}`} aria-hidden />
+                  {keysRefreshing ? 'Checking…' : 'Re-check keys'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

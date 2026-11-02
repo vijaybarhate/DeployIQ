@@ -525,22 +525,84 @@ def test_models_status_ranks_live_first(monkeypatch):
     model_service.clear_catalog_cache()
 
 
-def test_trigger_rejects_paid_model_override(_verified_catalog):
-    incident_id = uuid.uuid4()
-    r = client.post(
-        f"/api/v1/incidents/{incident_id}/investigations", json={"model": "vendor/paid"}
+def _keyed_settings(monkeypatch, keys):
+    import types
+
+    fake = types.SimpleNamespace(
+        openrouter_api_keys=list(keys),
+        openrouter_model="",
+        openrouter_base_url="http://x",
+        openrouter_timeout_seconds=5.0,
     )
-    assert r.status_code == 422, r.text
+    monkeypatch.setattr(model_service, "get_settings", lambda: fake)
+    return fake
 
 
-def _fake_settings(monkeypatch, model="", fallbacks=()):
+def test_keys_status_reports_per_key_health(monkeypatch):
+    import asyncio
+
+    from app.llm.base import LLMCompletion, LLMError, LLMErrorCode, TokenUsage
+
+    _keyed_settings(monkeypatch, ["k1", "k2", "k3"])
+    model_service.clear_catalog_cache()
+
+    class _FakeProvider:
+        def __init__(self, **kwargs):
+            self._key = kwargs.get("api_key", "")
+
+        async def complete_json(self, system_prompt, user_prompt):
+            if self._key == "k1":
+                return LLMCompletion(
+                    parsed={"ok": True}, actual_model="x", usage=TokenUsage(), latency_ms=42
+                )
+            if self._key == "k2":
+                raise LLMError(LLMErrorCode.RATE_LIMITED, "limited")
+            raise LLMError(LLMErrorCode.TIMEOUT, "slow")
+
+    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FakeProvider)
+    out = asyncio.run(model_service.list_key_statuses(refresh=True))
+    assert [(e["index"], e["status"]) for e in out] == [(1, "live"), (2, "limited"), (3, "slow")]
+    assert out[0]["latency_ms"] == 42
+    # Cached: second call pings nothing.
+    r = asyncio.run(model_service.list_key_statuses())
+    assert [(e["index"], e["status"]) for e in r] == [(1, "live"), (2, "limited"), (3, "slow")]
+    model_service.clear_catalog_cache()
+
+
+def test_keys_route_reports_indexes_never_values(monkeypatch):
+    from app.llm.base import LLMCompletion, TokenUsage
+
+    _keyed_settings(monkeypatch, ["k1"])
+    model_service.clear_catalog_cache()
+
+    class _FakeProvider:
+        def __init__(self, **kwargs):
+            self._key = kwargs.get("api_key", "")
+
+        async def complete_json(self, system_prompt, user_prompt):
+            assert self._key == "k1"
+            return LLMCompletion(
+                parsed={"ok": True}, actual_model="x", usage=TokenUsage(), latency_ms=7
+            )
+
+    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FakeProvider)
+    r = client.get("/api/v1/models/keys?refresh=true")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body == [{"index": 1, "status": "live", "latency_ms": 7, "reason": ""}]
+    assert "k1" not in r.text
+    model_service.clear_catalog_cache()
+
+
+def _fake_settings(monkeypatch, model="", fallbacks=(), keys=("k",)):
     import types
 
     import app.services.investigation as _inv
 
     fake = types.SimpleNamespace(
         openrouter_model=model,
-        openrouter_api_key="k",
+        openrouter_api_key=keys[0] if keys else "",
+        openrouter_api_keys=list(keys),
         openrouter_base_url="http://x",
         openrouter_timeout_seconds=5.0,
         openrouter_max_output_tokens=10,
@@ -551,6 +613,14 @@ def _fake_settings(monkeypatch, model="", fallbacks=()):
     monkeypatch.setattr(model_service, "get_settings", lambda: fake)
     monkeypatch.setattr(_inv, "get_settings", lambda: fake)
     return fake
+
+
+def test_trigger_rejects_paid_model_override(_verified_catalog):
+    incident_id = uuid.uuid4()
+    r = client.post(
+        f"/api/v1/incidents/{incident_id}/investigations", json={"model": "vendor/paid"}
+    )
+    assert r.status_code == 422, r.text
 
 
 def test_trigger_rejects_unverified_configured_default(monkeypatch, _verified_catalog):

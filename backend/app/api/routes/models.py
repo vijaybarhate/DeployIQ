@@ -39,6 +39,13 @@ class ModelStatus(BaseModel):
     reason: str = ""
 
 
+class KeyStatus(BaseModel):
+    index: int = Field(description="1-based position in the pooled keys; never the key itself")
+    status: str = Field(description="live | limited | slow | down")
+    latency_ms: int | None = None
+    reason: str = ""
+
+
 @router.get("/status", response_model=list[ModelStatus])
 async def model_statuses(refresh: bool = False) -> list[ModelStatus]:
     """Live availability for every verified model, cheapest-first.
@@ -47,6 +54,13 @@ async def model_statuses(refresh: bool = False) -> list[ModelStatus]:
     """
     items = await model_service.list_model_statuses(refresh=refresh)
     return [ModelStatus(**e) for e in items]
+
+
+@router.get("/keys", response_model=list[KeyStatus])
+async def key_statuses(refresh: bool = False) -> list[KeyStatus]:
+    """Per-key health of the pooled OpenRouter keys (indexes only, never values)."""
+    items = await model_service.list_key_statuses(refresh=refresh)
+    return [KeyStatus(**e) for e in items]
 
 
 @router.post("/check", response_model=CheckResponse)

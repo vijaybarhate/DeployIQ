@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { checkModel, containerLogs, listContainers, listModels, listModelStatuses } from '../lib/api/console';
+import { checkModel, containerLogs, listContainers, listModelKeys, listModels, listModelStatuses } from '../lib/api/console';
 import { getHealth, getIncident, listIncidents } from '../lib/api/incidents';
 import { listInvestigations, triggerInvestigation } from '../lib/api/investigations';
 import type { Investigation } from '../types/api';
@@ -107,6 +107,17 @@ function healthFromError(err: unknown): ModelHealth {
     return { status: 'slow', actualModel: '', latencyMs: null, error: 'timed out' };
   }
   return { status: 'down', actualModel: '', latencyMs: null, error: message || 'check failed' };
+}
+
+/** Live health of every pooled key (indexes only — values never leave the backend). */
+export function useModelKeys() {
+  return useQuery({
+    queryKey: ['model-keys'],
+    queryFn: () => listModelKeys(),
+    staleTime: 120_000,
+    refetchInterval: 120_000,
+    retry: false,
+  });
 }
 
 /** Live health of one engine pick: pings the backend check on every change. */

@@ -35,7 +35,10 @@ is no background queue — no investigation ever starts on its own.
 
 Prerequisites: Docker Desktop running, root `.env` present with
 `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (a `:free` model) and optional
-`OPENROUTER_FALLBACK_MODELS` (all `:free`). Never commit `.env`.
+`OPENROUTER_FALLBACK_MODELS` (all `:free`). For pooled availability checks,
+add teammate keys as `OPENROUTER_API_KEY1`, `_KEY2`, … `_KEY9` (same file);
+the backend logs the pooled key count at startup (never the values) and the
+console shows per-key live/limited status. Never commit `.env`.
 `DATABASE_URL` defaults to `sqlite:///./deployiq.db` when the app is launched
 from `backend/` (do not leave it blank — empty values override the default).
 `MONITORED_PROJECTS` must be set in **each** terminal (it is read from the

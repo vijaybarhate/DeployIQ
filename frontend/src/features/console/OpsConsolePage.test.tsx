@@ -12,6 +12,7 @@ function mockApi() {
       const url = String(input);
       let body: unknown = {};
       if (url.includes('/healthz')) body = { ok: true, service: 'x', docker: { connected: true, version: '29.8.2' } };
+      else if (url.includes('/models/status') || url.includes('/models/keys')) body = [];
       else if (url.includes('/models')) body = [{ id: 'openrouter/free', name: 'OpenRouter Free Router' }];
       else if (url.includes('/docker/containers')) body = [];
       if (url.includes('/logs')) body = { name: 'c', lines: [], truncated: false };
@@ -341,6 +342,47 @@ describe('OpsConsolePage', () => {
     expect(await screen.findByText('division by zero in handler')).toBeInTheDocument();
     const link = screen.getByRole('link', { name: /Download report/ });
     expect(link.getAttribute('href')).toContain('/report');
+  });
+
+  it('shows per-key health in the server key popover', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/models/keys')) {
+          return {
+            ok: true, status: 200, statusText: 'OK',
+            json: async () => [
+              { index: 1, status: 'live', latency_ms: 100, reason: '' },
+              { index: 2, status: 'limited', latency_ms: null, reason: 'rate_limited' },
+            ],
+          } as Response;
+        }
+        if (url.includes('/models')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+        }
+        if (url.includes('/docker/containers')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+        }
+        if (url.includes('/logs')) {
+          return {
+            ok: true, status: 200, statusText: 'OK',
+            json: async () => ({ name: 'c', lines: [], truncated: false }),
+          } as Response;
+        }
+        return {
+          ok: true, status: 200, statusText: 'OK',
+          json: async () => ({ ok: true, service: 'x', docker: { connected: true } }),
+        } as Response;
+      }),
+    );
+    renderPage();
+    await screen.findByRole('heading', { name: 'Operations console' });
+    expect(await screen.findByText('1/2 keys live')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Server API keys health' }));
+    expect(await screen.findByText('Key 1')).toBeInTheDocument();
+    expect(screen.getByText('live · 100ms')).toBeInTheDocument();
+    expect(screen.getByText('Key 2')).toBeInTheDocument();
   });
 
   it('re-check button bypasses the server cache with refresh=true', async () => {

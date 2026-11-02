@@ -29,8 +29,19 @@ export interface ModelStatusInfo {
   reason: string;
 }
 
+export interface KeyStatusInfo {
+  index: number;
+  status: 'live' | 'limited' | 'slow' | 'down';
+  latency_ms: number | null;
+  reason: string;
+}
+
 export function listModelStatuses(refresh = false): Promise<ModelStatusInfo[]> {
   return api.get<ModelStatusInfo[]>(`/models/status${refresh ? '?refresh=true' : ''}`);
+}
+
+export function listModelKeys(refresh = false): Promise<KeyStatusInfo[]> {
+  return api.get<KeyStatusInfo[]>(`/models/keys${refresh ? '?refresh=true' : ''}`);
 }
 
 export interface ModelCheck {
