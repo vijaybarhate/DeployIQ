@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.collector.docker_watcher import DockerUnavailableError
 from app.services import docker_ops
+from app.services.ingestion import OutOfScopeError
 
 router = APIRouter(prefix="/docker", tags=["docker"])
 
@@ -22,6 +23,10 @@ def container_logs(
 ) -> dict:
     try:
         return docker_ops.container_logs(name, tail=tail)
+    except OutOfScopeError as exc:
+        # Before ValueError: OutOfScopeError subclasses it, and scope
+        # rejection (403) must not be masked as bad input (422).
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except KeyError as exc:

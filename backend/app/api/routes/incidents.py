@@ -81,8 +81,7 @@ class ManualIngestRequest(BaseModel):
 def create_manual_incident(
     payload: ManualIngestRequest, session: Session = Depends(get_session)
 ) -> IncidentRead:
-    from app.evidence.extractor import extract_evidence
-    from app.evidence.normalizer import build_title
+    from app.evidence.extractor import count_matching_lines, extract_evidence
     from app.schemas.incident import EvidenceItem
     from app.services.ingestion import OutOfScopeError, ingest_event
 
@@ -94,6 +93,7 @@ def create_manual_incident(
         )
     category = str(ev["category"])
     detail = str(ev.get("exception_type") or ev.get("exit_code") or category)
+    container_name = payload.container_name.strip()
     evidence = [
         EvidenceItem(
             kind=category,
@@ -101,12 +101,12 @@ def create_manual_incident(
             detail=(
                 f"action=manual exc={ev.get('exception_type', '')} "
                 f"frame={ev.get('last_frame', '')}"
+                + (f" container={container_name}" if container_name else "")
             ),
         )
     ]
-    title = build_title("docker", payload.project_id, category, detail)
-    if payload.container_name.strip():
-        title = f"{title} [{payload.container_name.strip()}]"
+    # ingest_event regenerates the title from (source, project, category,
+    # detail), so container identity lives in the evidence detail above.
     try:
         incident, _ = ingest_event(
             session,
@@ -117,6 +117,7 @@ def create_manual_incident(
             raw_logs=payload.raw_logs,
             evidence=evidence,
             allowlist=settings.monitored_project_list,
+            matched_lines=count_matching_lines(payload.raw_logs),
         )
     except OutOfScopeError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc

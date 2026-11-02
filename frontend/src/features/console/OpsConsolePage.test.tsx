@@ -208,4 +208,55 @@ describe('OpsConsolePage', () => {
     expect(await screen.findByText(/no crash evidence/)).toBeInTheDocument();
     expect(posts.some((p) => p.body.includes('"project_id":"my-proj"'))).toBe(true);
   });
+
+  it('shows the recorded incident in the right diagnostic panel', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/models/check')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => ({}) } as Response;
+        }
+        if (url.includes('/models')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+        }
+        if (url.endsWith('/incidents/manual')) {
+          return {
+            ok: true, status: 201, statusText: 'Created',
+            json: async () => ({ id: 'inc-9', title: 'boom incident' }),
+          } as Response;
+        }
+        if (url.includes('/investigations')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+        }
+        if (url.includes('/logs')) {
+          return {
+            ok: true, status: 200, statusText: 'OK',
+            json: async () => ({
+              name: 'c1',
+              lines: ['Traceback (most recent call last):', 'ZeroDivisionError: x'],
+              truncated: false,
+            }),
+          } as Response;
+        }
+        if (url.includes('/docker/containers')) {
+          return {
+            ok: true, status: 200, statusText: 'OK',
+            json: async () => [
+              { name: 'c1', short_id: 'abc', status: 'running', health: '', project: 'my-proj' },
+            ],
+          } as Response;
+        }
+        return {
+          ok: true, status: 200, statusText: 'OK',
+          json: async () => ({ ok: true, service: 'x', docker: { connected: true } }),
+        } as Response;
+      }),
+    );
+    renderPage();
+    await screen.findByText('c1');
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnose' }));
+    expect(await screen.findByText(/recorded/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Investigate/ })).toBeInTheDocument();
+  });
 });

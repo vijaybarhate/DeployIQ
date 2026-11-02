@@ -1,4 +1,10 @@
-# M3.3-E Live Demo — DeployIQ end-to-end (develop @490be4e + feat/m3.3-live-demo)
+# DeployIQ Demo Guide — 3-case ops-console walkthrough (develop + feat/ops-console)
+
+The demo opens on the ops console: `http://localhost:5173/console`
+(reference-inspired two-panel layout: container explorer + live tail on the
+left, incident diagnostic + AI report on the right). Capabilities covered:
+free-model engine picker with live health check, manual log ingestion, SRE
+Copilot grounded Q&A, per-investigation model override, .docx reports.
 
 ## 1. Architecture under demo (implemented, no new backend)
 

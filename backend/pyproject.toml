@@ -24,6 +24,7 @@ ignore = ["B008"]
 known-third-party = [
     "alembic",
     "docker",
+    "docx",
     "fastapi",
     "httpx",
     "langgraph",

@@ -10,7 +10,7 @@ export function AppRouter() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route index element={<Navigate to="/overview" replace />} />
+        <Route index element={<Navigate to="/console" replace />} />
         <Route path="/overview" element={<OverviewPage />} />
         <Route path="/console" element={<OpsConsolePage />} />
         <Route path="/incidents" element={<IncidentCenterPage />} />

@@ -15,8 +15,18 @@ import { ApiError } from '../../lib/api/client';
 import { askCopilot, containerLogs, manualIngest } from '../../lib/api/console';
 import { triggerInvestigation } from '../../lib/api/investigations';
 import { formatClockTime } from '../../lib/time';
-import { useContainers, useContainerLogs, useHealth, useModels, useModelStatus } from '../../hooks/queries';
+import {
+  isInvestigationActive,
+  useContainers,
+  useContainerLogs,
+  useHealth,
+  useInvestigations,
+  useModels,
+  useModelStatus,
+} from '../../hooks/queries';
+import { useNow } from '../../hooks/useNow';
 import type { CopilotAnswer, Incident } from '../../types/api';
+import { InvestigationCard } from '../investigations/InvestigationCard';
 
 type Tab = 'live' | 'manual' | 'copilot';
 
@@ -65,6 +75,19 @@ export function OpsConsolePage() {
   const containers = useContainers();
   const models = useModels();
   const logs = useContainerLogs(attached, tail);
+  // Diagnostic state for the right panel: history of the recorded incident,
+  // polled while any investigation is active (same rhythm as details page).
+  const history = useInvestigations(madeIncident?.id);
+  const historyActive = (history.data ?? []).some((i) => isInvestigationActive(i.status));
+  const nowMs = useNow(historyActive);
+  const { refetch: refetchHistory } = history;
+  useEffect(() => {
+    if (!historyActive) return undefined;
+    const timer = setInterval(() => {
+      void refetchHistory();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [historyActive, refetchHistory]);
 
   useEffect(() => {
     try {
@@ -116,15 +139,28 @@ export function OpsConsolePage() {
     setTab('live');
   }
 
+  function handleCiteEvidence(anchorId: string) {
+    const el = document.getElementById(anchorId);
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('ring-2', 'ring-emerald-500');
+      window.setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-500'), 1600);
+    }
+  }
+
   async function diagnoseContainer(name: string, project?: string) {
     setBusy('diagnose');
     setError(null);
     setNotice(null);
     // Scope to the container's own Compose project: the backend fail-closes
-    // on unlisted projects, so sending the picker default would 403.
-    const scope =
-      (project || containers.data?.find((c) => c.name === name)?.project || '').trim() ||
-      'deployiq-demo';
+    // on unlisted projects. No fallback — an unknown project refuses rather
+    // than guessing its way into scope.
+    const scope = (project || containers.data?.find((c) => c.name === name)?.project || '').trim();
+    if (!scope) {
+      setError('Container project unknown — refusing to diagnose outside the monitored scope.');
+      setBusy(null);
+      return;
+    }
     try {
       const tailLogs = await containerLogs(name, 500);
       const text = tailLogs.lines.join('\n');
@@ -327,9 +363,10 @@ export function OpsConsolePage() {
         </p>
       )}
 
-      <div className="grid items-start gap-4 lg:grid-cols-[400px_minmax(0,1fr)]">
-        {/* LEFT rail: input */}
-        <section className="overflow-hidden rounded-xl border border-slate-800 bg-[#0a0f1a]">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="min-w-0 space-y-4">
+          {/* LEFT rail: input */}
+          <section className="overflow-hidden rounded-xl border border-slate-800 bg-[#0a0f1a]">
           <div
             className="flex gap-1 border-b border-slate-800/80 p-2"
             role="tablist"
@@ -634,7 +671,7 @@ export function OpsConsolePage() {
           </div>
         </section>
 
-        {/* RIGHT: terminal */}
+        {/* LEFT: live terminal tail */}
         <section
           className="overflow-hidden rounded-xl border border-slate-800 bg-[#0a0f1a]"
           data-tour="console-terminal"
@@ -745,7 +782,7 @@ export function OpsConsolePage() {
                   </div>
                 ))}
               </pre>
-              <div className="space-y-2.5 border-t border-slate-800/80 p-4" data-tour="console-diagnose">
+              <div className="space-y-2.5 border-t border-slate-800/80 p-4">
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -756,35 +793,108 @@ export function OpsConsolePage() {
                     <Stethoscope className="h-4 w-4" aria-hidden />
                     {busy === 'diagnose' ? 'Recording…' : 'Diagnose these logs'}
                   </button>
-                  {madeIncident && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => runInvestigation(madeIncident.id)}
-                        disabled={busy === 'investigate'}
-                        className="flex min-h-[44px] cursor-pointer items-center rounded-lg border border-emerald-500/40 px-3.5 py-2 text-sm font-medium text-emerald-300 transition-colors duration-200 hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {busy === 'investigate'
-                          ? 'Starting…'
-                          : `Investigate · ${shortModel(effectiveModel) || 'default'}`}
-                      </button>
-                      <Link
-                        to={`/incidents/${madeIncident.id}`}
-                        className="flex min-h-[44px] items-center rounded-lg border border-slate-700 px-3.5 py-2 text-sm text-slate-300 transition-colors duration-200 hover:border-slate-500 hover:text-white"
-                        title="Each investigation on the incident page has its own .docx report download."
-                      >
-                        Open incident →
-                      </Link>
-                    </>
-                  )}
                 </div>
                 <p className="text-[11px] leading-relaxed text-slate-500">
-                  Diagnose records one incident (deduplicated by fingerprint). Investigation runs
-                  explicitly with the engine shown above — free models only.
+                  Diagnose records one incident (deduplicated by fingerprint). The
+                  diagnosis appears in the panel on the right.
                 </p>
               </div>
             </div>
           )}
+        </section>
+        </div>
+
+        {/* RIGHT: incident diagnostic */}
+        <section
+          className="overflow-hidden rounded-xl border border-slate-800 bg-[#0a0f1a] lg:sticky lg:top-24"
+          data-tour="console-diagnose"
+          aria-label="Incident diagnostic"
+        >
+          <div className="border-b border-slate-800/80 bg-slate-950/60 px-4 py-3">
+            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
+              Diagnostic
+            </p>
+            <h2 className="mt-0.5 text-sm font-semibold tracking-tight text-slate-100">
+              {madeIncident ? (
+                <>Incident · <span className="font-mono text-[13px]">{madeIncident.title}</span></>
+              ) : (
+                'No incident recorded yet'
+              )}
+            </h2>
+          </div>
+          <div className="space-y-3 p-4">
+            {!madeIncident ? (
+              <>
+                <p className="text-sm leading-relaxed text-slate-400">
+                  Diagnose a log tail on the left and the incident lands here — with its
+                  AI investigation and downloadable report. Nothing runs until you ask.
+                </p>
+                <p className="font-mono text-[11px] leading-relaxed text-slate-600">
+                  states: recorded → investigating → completed / failed
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    to={`/incidents/${madeIncident.id}`}
+                    className="font-mono text-xs text-emerald-300 underline-offset-4 hover:underline"
+                  >
+                    Open incident →
+                  </Link>
+                  <span className="font-mono text-[11px] text-slate-500">
+                    {historyActive
+                      ? 'investigation running…'
+                      : history.data && history.data.length > 0
+                        ? `${history.data.length} attempt${history.data.length === 1 ? '' : 's'}`
+                        : 'no investigations yet'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => runInvestigation(madeIncident.id)}
+                    disabled={busy === 'investigate' || historyActive}
+                    className="ml-auto flex min-h-[40px] cursor-pointer items-center rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {busy === 'investigate'
+                      ? 'Starting…'
+                      : `Investigate · ${shortModel(effectiveModel) || 'default'}`}
+                  </button>
+                </div>
+                {history.isLoading ? (
+                  <p className="text-sm text-slate-400">Loading investigation history…</p>
+                ) : history.isError ? (
+                  <p role="alert" className="text-sm text-amber-300">
+                    Could not load investigation history.{' '}
+                    <button type="button" onClick={() => history.refetch()} className="underline">
+                      Retry
+                    </button>
+                  </p>
+                ) : (history.data ?? []).length === 0 ? (
+                  <p className="text-sm text-slate-400">
+                    Recorded. Press Investigate to run the AI with the engine shown above —
+                    free models only.
+                  </p>
+                ) : (
+                  <ul className="space-y-3">
+                    {(history.data ?? []).map((inv) => (
+                      <InvestigationCard
+                        key={inv.id}
+                        investigation={inv}
+                        expanded
+                        nowMs={nowMs}
+                        onToggle={() => undefined}
+                        onCiteEvidence={handleCiteEvidence}
+                      />
+                    ))}
+                  </ul>
+                )}
+                <p className="text-[11px] leading-relaxed text-slate-500">
+                  Investigation runs explicitly with the engine shown above — free models
+                  only. Completed reports download as .docx.
+                </p>
+              </>
+            )}
+          </div>
         </section>
       </div>
     </div>

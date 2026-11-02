@@ -73,23 +73,78 @@ def test_is_free_model_policy():
     assert not is_free_model("")
 
 
-def test_docker_containers_success(monkeypatch):
+class _FakeContainer:
+    def __init__(self, name, status="running", health="", project="", logs_text=""):
+        self.name = name
+        self.short_id = "abc123"
+        self.status = status
+        self._logs = logs_text
+        self.attrs = {
+            "State": {"Health": {"Status": health}} if health else {},
+            "Config": {"Labels": {"com.docker.compose.project": project} if project else {}},
+        }
+
+    def logs(self, tail=200, timestamps=False):
+        return self._logs.encode("utf-8")
+
+
+class _FakeContainers:
+    def __init__(self, items):
+        self._items = {c.name: c for c in items}
+
+    def list(self, all=True):
+        return list(self._items.values())
+
+    def get(self, name):
+        try:
+            return self._items[name]
+        except KeyError:
+            raise Exception(f"No such container: {name}") from None
+
+
+class _FakeClient:
+    def __init__(self, items):
+        self.containers = _FakeContainers(items)
+
+
+@pytest.fixture
+def _scope(monkeypatch):
+    """Pin the allowlist without touching the cached global settings."""
+    monkeypatch.setattr(docker_ops, "_allowlist", lambda: ["my-proj"])
+
+
+@pytest.fixture
+def _client(monkeypatch):
     monkeypatch.setattr(
         docker_ops,
-        "list_containers",
-        lambda: [
-            {
-                "name": "crashme",
-                "short_id": "abc",
-                "status": "running",
-                "health": "",
-                "project": "demo",
-            }
-        ],
+        "get_client",
+        lambda: _FakeClient(
+            [
+                _FakeContainer(
+                    "ok-1", status="running", health="healthy", project="my-proj", logs_text="ok\n"
+                ),
+                _FakeContainer(
+                    "other-1", status="running", project="other-proj", logs_text="nope\n"
+                ),
+                _FakeContainer("nolabel-1", status="running", logs_text="plain\n"),
+                _FakeContainer(
+                    "leaky-1",
+                    status="running",
+                    health="healthy",
+                    project="my-proj",
+                    logs_text="starting\napi_key=sk-or-SECRET1234567890\ntoken abcdef\ndone\n",
+                ),
+            ]
+        ),
     )
+
+
+def test_docker_list_only_monitored(_scope, _client):
     r = client.get("/api/v1/docker/containers")
     assert r.status_code == 200, r.text
-    assert r.json()[0]["name"] == "crashme"
+    names = [c["name"] for c in r.json()]
+    assert names == ["leaky-1", "ok-1"]  # sorted; other-proj + unlabeled hidden
+    assert all(c["project"] == "my-proj" for c in r.json())
 
 
 def test_docker_unavailable_is_503(monkeypatch):
@@ -106,23 +161,33 @@ def test_container_logs_validation():
     assert r.status_code == 422
 
 
-def test_container_logs_not_found(monkeypatch):
-    monkeypatch.setattr(
-        docker_ops, "container_logs", lambda name, tail=200: (_ for _ in ()).throw(KeyError(name))
-    )
+def test_container_logs_not_found(_scope, _client):
     r = client.get("/api/v1/docker/containers/nope/logs")
     assert r.status_code == 404
 
 
-def test_container_logs_success(monkeypatch):
-    monkeypatch.setattr(
-        docker_ops,
-        "container_logs",
-        lambda name, tail=200: {"name": name, "lines": ["boom"], "truncated": False},
-    )
-    r = client.get("/api/v1/docker/containers/crashme/logs?tail=50")
+def test_container_logs_success(_scope, _client):
+    r = client.get("/api/v1/docker/containers/ok-1/logs?tail=50")
     assert r.status_code == 200, r.text
-    assert r.json()["lines"] == ["boom"]
+    assert r.json()["lines"] == ["ok"]
+
+
+def test_docker_logs_rejects_unlisted_project(_scope, _client):
+    r = client.get("/api/v1/docker/containers/other-1/logs")
+    assert r.status_code == 403, r.text
+
+
+def test_docker_logs_rejects_missing_project_label(_scope, _client):
+    r = client.get("/api/v1/docker/containers/nolabel-1/logs")
+    assert r.status_code == 403, r.text
+
+
+def test_docker_logs_redacts_secrets(_scope, _client):
+    r = client.get("/api/v1/docker/containers/leaky-1/logs")
+    assert r.status_code == 200, r.text
+    text = "\n".join(r.json()["lines"])
+    assert "SECRET1234567890" not in text
+    assert "[REDACTED]" in text
 
 
 def test_models_fallback_without_key(monkeypatch):
@@ -138,6 +203,44 @@ async def _raise_unavailable(*args, **kwargs):
     raise RuntimeError("offline")
 
 
+def _free_entry(model_id, name="M"):
+    """Catalogue entry that passes every verification gate."""
+    return {
+        "id": model_id,
+        "name": name,
+        "pricing": {"prompt": "0", "completion": "0"},
+        "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+    }
+
+
+@pytest.fixture
+def _verified_catalog(monkeypatch):
+    """Fake catalogue: one verified free model plus every rejection case."""
+    entries = [
+        _free_entry("m:free"),
+        {
+            "id": "m:paid",
+            "name": "P",
+            "pricing": {"prompt": "0.001", "completion": "0.002"},
+            "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+        },
+        {"id": "m:mystery:free", "name": "X", "pricing": {}, "architecture": {}},
+        {
+            "id": "m:embed:free",
+            "name": "E",
+            "pricing": {"prompt": "0", "completion": "0"},
+            "architecture": {"input_modalities": ["text"], "output_modalities": ["embeddings"]},
+        },
+    ]
+
+    async def _fake(*args, **kwargs):
+        return [dict(e) for e in entries]
+
+    model_service.clear_catalog_cache()
+    monkeypatch.setattr(model_service, "fetch_catalog", _fake)
+    return entries
+
+
 def test_models_filters_non_free(monkeypatch):
     import asyncio
 
@@ -145,17 +248,26 @@ def test_models_filters_non_free(monkeypatch):
 
     async def _fake(*args, **kwargs):
         return [
-            {"id": "b/model:free", "name": "B"},
-            {"id": "a/paid", "name": "A"},
-            {"id": "openrouter/auto", "name": "Auto"},
+            _free_entry("b/model:free", "B"),
+            {
+                "id": "a/paid",
+                "name": "A",
+                "pricing": {"prompt": "0.001", "completion": "0"},
+                "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+            },
+            {
+                "id": "openrouter/auto",
+                "name": "Auto",
+                "pricing": {"prompt": "0", "completion": "0"},
+                "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+            },
         ]
 
     monkeypatch.setattr(model_service, "fetch_catalog", _fake)
     # Bypass cache by clearing right before (fetch runs, filters, sorts).
     items = asyncio.run(model_service.list_free_models())
     ids = [e["id"] for e in items]
-    assert "b/model:free" in ids
-    assert all(e.endswith(":free") or e == "openrouter/free" for e in ids)
+    assert ids == ["b/model:free"]  # paid + auto-router rejected despite zero pricing
     model_service.clear_catalog_cache()
 
 
@@ -168,7 +280,7 @@ def test_models_route_uses_fallback(monkeypatch):
     model_service.clear_catalog_cache()
 
 
-def test_models_check_ok_strict_no_fallbacks(monkeypatch):
+def test_models_check_ok_strict_no_fallbacks(monkeypatch, _verified_catalog):
     import asyncio
 
     from app.llm.base import LLMCompletion, TokenUsage
@@ -198,12 +310,39 @@ def test_models_check_ok_strict_no_fallbacks(monkeypatch):
     assert r.json()["ok"] is True
 
 
-def test_models_check_rejects_paid_model():
-    r = client.post("/api/v1/models/check", json={"model": "vendor/paid"})
+def test_models_check_rejects_paid_model(_verified_catalog):
+    r = client.post("/api/v1/models/check", json={"model": "m:paid"})
     assert r.status_code == 422, r.text
 
 
-def test_models_check_provider_failure_is_502(monkeypatch):
+def test_models_rejects_unknown_free_suffix(_verified_catalog):
+    import asyncio
+
+    with pytest.raises(ValueError, match="not a verified free model"):
+        asyncio.run(model_service.ensure_verified_free_model("ghost/model:free"))
+
+
+def test_models_rejects_embeddings_and_missing_metadata(_verified_catalog):
+    import asyncio
+
+    with pytest.raises(ValueError, match="not a verified free model"):
+        asyncio.run(model_service.ensure_verified_free_model("m:embed:free"))
+    with pytest.raises(ValueError, match="not a verified free model"):
+        asyncio.run(model_service.ensure_verified_free_model("m:mystery:free"))
+
+
+def test_models_accepts_free_router_without_catalog():
+    import asyncio
+
+    model_service.clear_catalog_cache()
+    assert (
+        asyncio.run(model_service.ensure_verified_free_model("openrouter/free"))
+        == "openrouter/free"
+    )
+    model_service.clear_catalog_cache()
+
+
+def test_models_check_provider_failure_is_502(monkeypatch, _verified_catalog):
     from app.llm.base import LLMError, LLMErrorCode
 
     class _FailingProvider:
@@ -241,6 +380,20 @@ def test_manual_ingest_ok_and_dedup():
     assert r.json()["id"] == first  # dedup by signature
 
 
+def test_manual_ingest_records_matched_lines_and_container():
+    logs = (
+        "Traceback (most recent call last):\n"
+        '  File "/code/worker.py", line 9, in run\n'
+        "ValueError: bad payload\n"
+    )
+    payload = {"project_id": "demo", "raw_logs": logs, "container_name": "boom-99"}
+    r = client.post("/api/v1/incidents/manual", json=payload)
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["matched_line_count"] > 0
+    assert any("container=boom-99" in (e.get("detail") or "") for e in body["evidence"])
+
+
 def test_manual_ingest_rejects_noise():
     r = client.post(
         "/api/v1/incidents/manual",
@@ -258,12 +411,84 @@ def test_manual_ingest_out_of_scope():
 def test_copilot_validation():
     r = client.post("/api/v1/copilot/ask", json={"question": ""})
     assert r.status_code == 422
-    r = client.post("/api/v1/copilot/ask", json={"question": "hi", "model": "vendor/paid"})
+    # Paid model rejected once validation is reached: seed an incident so the
+    # request gets past the insufficient-context short-circuit.
+    logs = "Traceback (most recent call last):\nZeroDivisionError: x\n"
+    inc = client.post("/api/v1/incidents/manual", json={"project_id": "demo", "raw_logs": logs})
+    assert inc.status_code == 201, inc.text
+    incident_id = inc.json()["id"]
+    r = client.post(
+        "/api/v1/copilot/ask",
+        json={"question": "hi", "incident_id": incident_id, "model": "vendor/paid"},
+    )
     assert r.status_code == 422, r.text
     r = client.post(
         "/api/v1/copilot/ask", json={"question": "hi", "incident_id": str(uuid.uuid4())}
     )
     assert r.status_code == 404, r.text
+
+
+def test_copilot_insufficient_context_without_llm(monkeypatch):
+    async def _boom(*args, **kwargs):
+        raise AssertionError("LLM must not be called without grounding")
+
+    monkeypatch.setattr("app.services.copilot.OpenRouterProvider", _boom)
+    r = client.post("/api/v1/copilot/ask", json={"question": "zzz-no-such-runbook-topic-qqq"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["evidence_ids"] == [] and body["runbook_ids"] == []
+    assert body["confidence"] == 0.0
+    assert "Not enough context" in body["answer"]
+
+
+def test_copilot_grounds_ids_and_clamps_confidence(monkeypatch):
+    from app.llm.base import LLMCompletion, TokenUsage
+    from app.rag.schemas import RetrievalResult
+    from app.services import copilot as copilot_service
+
+    logs = "Traceback (most recent call last):\nZeroDivisionError: x\n"
+    inc = client.post("/api/v1/incidents/manual", json={"project_id": "demo", "raw_logs": logs})
+    incident_id = inc.json()["id"]
+
+    def _fake_retrieve(question, top_k=3):
+        return [
+            RetrievalResult(
+                runbook_id="RB-001",
+                title="T",
+                relevance_score=1.0,
+                matched_sections=[],
+                source_urls=[],
+            )
+        ]
+
+    class _FakeRetriever:
+        retrieve = staticmethod(_fake_retrieve)
+
+    class _FakeProvider:
+        def __init__(self, **kwargs):
+            pass
+
+        async def complete_json(self, system_prompt, user_prompt):
+            return LLMCompletion(
+                parsed={
+                    "answer": "boom",
+                    "evidence_ids": ["E-001", "E-999"],
+                    "runbook_ids": ["RB-001", "RB-999"],
+                    "confidence": 42,
+                },
+                actual_model="m",
+                usage=TokenUsage(),
+                latency_ms=1,
+            )
+
+    monkeypatch.setattr("app.services.copilot.OpenRouterProvider", _FakeProvider)
+    monkeypatch.setattr(copilot_service, "get_retriever", lambda: _FakeRetriever())
+    r = client.post("/api/v1/copilot/ask", json={"question": "why", "incident_id": incident_id})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["evidence_ids"] == ["E-001"]
+    assert body["runbook_ids"] == ["RB-001"]
+    assert body["confidence"] == 1.0
 
 
 def test_report_download_and_404():

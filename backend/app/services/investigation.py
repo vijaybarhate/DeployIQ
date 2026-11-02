@@ -49,6 +49,8 @@ def _pipeline_key(model_override: str | None = None) -> tuple:
 
     settings = get_settings()
     if model_override is not None and not is_free_model(model_override):
+        # Syntax backstop only: catalogue verification happens in
+        # run_investigation before any record is created.
         raise ValueError(f"model must be an explicit free model id, got: {model_override!r}")
     key_hash = hashlib.sha256(settings.openrouter_api_key.encode("utf-8")).hexdigest()[:16]
     return (
@@ -98,9 +100,14 @@ async def run_investigation(
     session: Session, incident_id: uuid.UUID, model_override: str | None = None
 ) -> Investigation:
     settings = get_settings()
-    # Validate the override before creating any record (ValueError -> 422,
-    # no orphan pending row).
-    pipeline_key = _pipeline_key(model_override)
+    # Catalogue verification before creating any record (ValueError -> 422,
+    # no orphan pending row). Single shared gate with /models/check + copilot.
+    from app.services.models import ensure_verified_free_model
+
+    verified_override = (
+        await ensure_verified_free_model(model_override) if model_override else None
+    )
+    pipeline_key = _pipeline_key(verified_override)
     incident = session.get(Incident, incident_id)
     if incident is None:
         raise KeyError(f"incident not found: {incident_id}")
@@ -108,7 +115,7 @@ async def run_investigation(
     record = Investigation(
         incident_id=incident.id,
         status="pending",
-        requested_model=model_override or settings.openrouter_model,
+        requested_model=verified_override or settings.openrouter_model,
         prompt_version=settings.prompt_version,
     )
     session.add(record)

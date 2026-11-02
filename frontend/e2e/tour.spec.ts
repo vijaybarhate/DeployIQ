@@ -80,8 +80,8 @@ test.describe('product tour (desktop)', () => {
     await page.goto('/console');
     const { button, popover } = await startTour(page);
     await expect(popover.getByText('Engine health at a glance')).toBeVisible();
-    // Diagnose step needs an attached container, so the unattended tour shows 5 of 6.
-    await expect(popover.getByText('Step 1 of 5')).toBeVisible();
+    // Diagnose step now lives in the always-rendered right panel: 6 of 6.
+    await expect(popover.getByText('Step 1 of 6')).toBeVisible();
     await popover.getByRole('button', { name: 'Next' }).click();
     await expect(popover.getByText('Three ways in')).toBeVisible();
     await page.keyboard.press('Escape');
