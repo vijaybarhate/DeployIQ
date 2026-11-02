@@ -47,7 +47,7 @@ export function OverviewPage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              <Link to="/incidents" className="text-base font-semibold text-slate-100 underline-offset-4 hover:underline">
+              <Link to="/incidents" className="font-semibold text-slate-100 underline-offset-4 hover:underline">
                 {summary.open} open
               </Link>
               {' · '}
