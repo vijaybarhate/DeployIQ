@@ -60,19 +60,19 @@ Health endpoints (do not confuse them):
   `/tmp/unhealthy` flag exists).
 - Dashboard: `http://localhost:5173` (Vite dev server, proxies `/api`).
 
-## 3. Verified live run (2026-11-01, Windows + Docker 29.8.2)
+## 3. Verified live run (3-case demo, Windows + Docker 29.8.2)
 
 | Step | Command / action | Result |
 |---|---|---|
-| Compose up | `docker compose -f demo/docker-compose.yml up -d --build` | `deployiq-demo-crashme-1` Up, healthy |
+| Compose up | `docker compose -f demo/docker-compose.yml up -d --build` | `crashme-ok`, `crashme-boom`, `crashme-dead` Up, healthy |
 | Migrate | `alembic upgrade head` (from `backend/`) | clean |
 | API | uvicorn on :8000 | `/api/v1/healthz` ok, docker connected |
 | Watcher | `python -m app.collector.watch` | streaming |
-| Crash | `GET :18000/boom` | HTTP 500, traceback in `docker logs` |
-| Incident | `GET /api/v1/incidents` | one deduplicated ZeroDivisionError incident (obs=2) |
-| Investigate | `POST /api/v1/incidents/{id}/investigations` | completed in ~15s |
-| RCA | investigation result | diagnosed, actual_model `nvidia/nemotron-3.5-super-vl:free`, 2903 tokens, finding E-001 + RB-007, approval-required fix steps, confidence 0.92 |
-| Crash-exit | `GET :18000/die` | container Exited(1); reset via compose restart (below) |
+| Case 1 all-good | open `crashme-ok` logs in Ops Console | only `/health 200` lines, Diagnose honestly refuses (422, no evidence) |
+| Case 2 app-error | `curl.exe -i http://127.0.0.1:18001/boom` (also auto-fires ~15s after boot) | HTTP 500, ZeroDivisionError traceback in `docker logs`; watcher auto-records ONE incident, repeat booms raise observation count (dedup) |
+| Case 3 hard-crash | `crashme-dead` calls `/die` ~45s after boot | container Exited(1); watcher auto-records exit-code incident, no click needed |
+| Investigate | console Diagnose / incident Run AI investigation | completed, actual_model freeRouter pick, findings cite E-00x + RB-00x |
+| RCA | investigation result | diagnosed, approval-required fix steps, confidence estimate |
 
 ## 4. Failure / fallback paths (demonstrated or covered by tests)
 
@@ -84,27 +84,33 @@ Health endpoints (do not confuse them):
 - Ghost/expired polling cleanup -> bounded misses, interval stops (unit).
 - Backend unreachable -> Incident Center error state (Playwright smoke).
 
-## 5. Repeatable 5–7 minute demo script
+## 5. Repeatable 7–10 minute demo script (3 cases)
 
 1. (0:00) `docker compose -f demo/docker-compose.yml up -d --build`, show
-   crashme healthy + backend `/api/v1/healthz`.
-2. (1:00) `curl.exe -i http://127.0.0.1:18000/boom` -> 500; show traceback
-   via `docker compose -f demo/docker-compose.yml logs --tail 50 crashme`.
-3. (2:00) Dashboard Incident Center: new ZeroDivisionError incident, evidence,
-   observation count grows on repeat booms (dedup, stays ONE incident).
-4. (3:00) Open incident -> Run AI investigation -> watch Queued -> Running
-   (elapsed clock, model label) -> Completed.
-5. (4:30) Report: root cause, finding chips E-001/RB-007 -> click citation
-   (focus jumps, panel opens), approval-required recommendation.
-6. (5:30) Failure path: stop backend (or bad key) -> error + Retry; restart.
-7. (6:30) `docker compose -f demo/docker-compose.yml restart crashme`
-   (container-only reset; application history is untouched, see section 6).
-   Q&A.
+   all three containers healthy + backend `/api/v1/healthz`.
+2. (1:00) **Case 1 — all good:** open `crashme-ok` in Ops Console, show clean
+   `/health 200` tail. Diagnose honestly refuses (no evidence) — the system
+   never invents incidents.
+3. (2:30) **Case 2 — app error:** `curl.exe -i http://127.0.0.1:18001/boom`
+   -> 500 live in front of the audience; show the traceback in the console
+   tail. Incident Center: ONE ZeroDivisionError incident; boom again ->
+   observation count grows, still ONE incident (dedup story).
+4. (4:30) Open the incident -> Run AI investigation -> Queued -> Running
+   (elapsed clock, verified engine label) -> Completed. Report: root cause,
+   finding chips (E-00x/RB-00x) -> click citation (focus jumps, panel opens),
+   approval-required recommendation, Download .docx.
+5. (7:00) **Case 3 — hard crash:** `crashme-dead` already Exited(1) — its
+   exit-code incident appeared with zero clicks. Re-run the death live:
+   `docker compose -f demo/docker-compose.yml restart crashme-dead`, wait
+   ~45s, watch the incident land. Q&A.
+6. Failure path (optional): stop backend -> error + Retry; restart.
 
 ## 6. Reset semantics (read before demoing)
 
-- CrashMe reset (container only):
-  `docker compose -f demo/docker-compose.yml restart crashme`.
+- CrashMe reset (containers only):
+  `docker compose -f demo/docker-compose.yml restart crashme-ok crashme-boom`
+  replays the boom timer (~15s); `restart crashme-dead` replays the death
+  (~45s). Application history is untouched, see below.
 - Full application-state reset (incidents/investigations): with the DEFAULT
   SQLite configuration and the app run from `backend/`, the database lives at
   `backend/deployiq.db`, which is OUTSIDE the Compose project, so
