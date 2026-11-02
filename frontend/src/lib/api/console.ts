@@ -21,6 +21,17 @@ export function listModels(): Promise<FreeModel[]> {
   return api.get<FreeModel[]>('/models');
 }
 
+export interface ModelCheck {
+  model: string;
+  ok: boolean;
+  actual_model: string;
+  latency_ms: number;
+}
+
+export function checkModel(model: string): Promise<ModelCheck> {
+  return api.post<ModelCheck>('/models/check', { model });
+}
+
 export interface ManualIngest {
   project_id: string;
   raw_logs: string;

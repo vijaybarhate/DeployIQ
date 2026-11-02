@@ -68,3 +68,49 @@ async def list_free_models() -> list[dict]:
     if configured and is_free_model(configured) and all(e["id"] != configured for e in items):
         items = [{"id": configured, "name": configured + " (configured)"}] + items
     return [dict(e) for e in items]
+
+
+CHECK_SYSTEM = 'Reply with exactly this JSON object and nothing else: {"ok": true}'
+CHECK_USER = "ping"
+
+
+async def check_model(model_id: str) -> dict:
+    """Ping one explicit free model with a tiny structured request.
+
+    Strict per-model check: no fallbacks, so the verdict reflects exactly
+    the model the user picked. Raises ValueError for non-free ids (422)
+    and LLMError for provider failures (502).
+    """
+    from app.llm.openrouter import OpenRouterProvider
+
+    cleaned = (model_id or "").strip()
+    if not is_free_model(cleaned):
+        raise ValueError(f"model must be an explicit free model id, got: {model_id!r}")
+    settings = get_settings()
+    provider = OpenRouterProvider(
+        api_key=settings.openrouter_api_key,
+        model=cleaned,
+        fallback_models=[],
+        base_url=settings.openrouter_base_url,
+        timeout_seconds=settings.openrouter_timeout_seconds,
+        # Generous ceiling: free reasoning models can spend tokens thinking
+        # before answering; the reply itself is one tiny JSON object.
+        max_output_tokens=300,
+    )
+    completion = await provider.complete_json(CHECK_SYSTEM, CHECK_USER)
+    parsed = completion.parsed if isinstance(completion.parsed, dict) else {}
+    if parsed.get("ok") is not True:
+        from app.llm.base import LLMError, LLMErrorCode
+
+        raise LLMError(
+            LLMErrorCode.INVALID_RESPONSE,
+            "model health check returned unexpected content",
+            model=completion.actual_model,
+            usage=completion.usage,
+        )
+    return {
+        "model": cleaned,
+        "ok": True,
+        "actual_model": completion.actual_model,
+        "latency_ms": completion.latency_ms,
+    }

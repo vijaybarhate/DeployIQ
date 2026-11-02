@@ -152,6 +152,7 @@ function InvestigationBody({ inv, selectedRunbookId, onSelectRunbook, onCiteEvid
             {' · '}
             <a
               href={reportDownloadUrl(inv.incident_id, inv.id)}
+              data-tour="workbench-download"
               className="text-emerald-300 underline hover:text-emerald-200"
             >
               Download report (.docx)

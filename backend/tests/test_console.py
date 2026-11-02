@@ -168,6 +168,56 @@ def test_models_route_uses_fallback(monkeypatch):
     model_service.clear_catalog_cache()
 
 
+def test_models_check_ok_strict_no_fallbacks(monkeypatch):
+    import asyncio
+
+    from app.llm.base import LLMCompletion, TokenUsage
+
+    seen: dict = {}
+
+    class _FakeProvider:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+        async def complete_json(self, system_prompt, user_prompt):
+            assert "ping" in user_prompt
+            return LLMCompletion(
+                parsed={"ok": True},
+                actual_model="m:free",
+                usage=TokenUsage(),
+                latency_ms=123,
+            )
+
+    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FakeProvider)
+    result = asyncio.run(model_service.check_model("m:free"))
+    assert result == {"model": "m:free", "ok": True, "actual_model": "m:free", "latency_ms": 123}
+    assert seen["fallback_models"] == []  # strict: verdict reflects the picked model only
+
+    r = client.post("/api/v1/models/check", json={"model": "m:free"})
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] is True
+
+
+def test_models_check_rejects_paid_model():
+    r = client.post("/api/v1/models/check", json={"model": "vendor/paid"})
+    assert r.status_code == 422, r.text
+
+
+def test_models_check_provider_failure_is_502(monkeypatch):
+    from app.llm.base import LLMError, LLMErrorCode
+
+    class _FailingProvider:
+        def __init__(self, **kwargs):
+            pass
+
+        async def complete_json(self, system_prompt, user_prompt):
+            raise LLMError(LLMErrorCode.TIMEOUT, "too slow")
+
+    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FailingProvider)
+    r = client.post("/api/v1/models/check", json={"model": "m:free"})
+    assert r.status_code == 502, r.text
+
+
 def test_trigger_rejects_paid_model_override():
     incident_id = uuid.uuid4()
     r = client.post(

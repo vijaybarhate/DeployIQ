@@ -33,10 +33,15 @@ export function OverviewPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-semibold">Operational overview</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-emerald-400">
+          DeployIQ // Live
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-50">
+          Operational overview
+        </h1>
+        <p className="mt-1 text-sm tabular-nums text-slate-400">
           Latest {summary.total} incidents loaded from the backend
           {summary.latestSeen ? ` · most recent activity ${formatDateTime(summary.latestSeen)}` : ''}. Metrics are
           computed from visible data only — not all-time statistics.
@@ -44,45 +49,49 @@ export function OverviewPage() {
       </div>
       <section
         aria-label="What DeployIQ does"
-        className="rounded-md border border-emerald-900 bg-emerald-950/30 p-4"
+        className="rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-400/[0.07] to-transparent p-4 sm:p-5"
       >
-        <h2 className="text-sm font-medium text-emerald-200">What am I looking at?</h2>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-300">
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-emerald-300">What am I looking at?</h2>
+        <ol className="mt-2.5 list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-slate-300">
           <li>
-            <strong className="text-slate-100">Watch</strong> — DeployIQ tails your Docker
+            <strong className="font-semibold text-slate-100">Watch</strong> — DeployIQ tails your Docker
             containers&apos; logs around the clock.
           </li>
           <li>
-            <strong className="text-slate-100">Group</strong> — repeat crashes with the same
+            <strong className="font-semibold text-slate-100">Group</strong> — repeat crashes with the same
             fingerprint become a single incident below.
           </li>
           <li>
-            <strong className="text-slate-100">Explain</strong> — open an incident, run an AI
+            <strong className="font-semibold text-slate-100">Explain</strong> — open an incident, run an AI
             investigation, and get the root cause plus fix steps.
           </li>
         </ol>
-        <p className="mt-2 text-sm">
-          <Link to="/incidents" className="text-emerald-300 hover:underline">
+        <p className="mt-3 text-sm">
+          <Link to="/console" className="font-medium text-emerald-300 underline-offset-4 hover:underline">
+            Open the ops console
+          </Link>
+          <span className="text-slate-500"> · </span>
+          <Link to="/incidents" className="text-slate-300 underline-offset-4 hover:underline">
             View incidents
           </Link>
-          <span className="text-slate-400"> or press “Take a tour” (top right) for a guided walkthrough.</span>
+          <span className="text-slate-500"> or press “Take a tour” (top right) for a guided walkthrough.</span>
         </p>
       </section>
-      <section aria-label="Collector status" data-tour="overview-collector" className="rounded-md border border-slate-800 bg-slate-900 p-4">
-        <h2 className="text-sm font-medium text-slate-200">Collector status</h2>
+      <section aria-label="Collector status" data-tour="overview-collector" className="rounded-xl border border-slate-800 bg-[#0a0f1a] p-4">
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">Collector status</h2>
         <CollectorStatus />
       </section>
       <section aria-label="Incident counts" data-tour="overview-counts" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {statCards.map(([label, value]) => (
-          <div key={label} className="rounded-md border border-slate-800 bg-slate-900 p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
-            <p className="mt-1 text-2xl font-semibold">{value}</p>
+          <div key={label} className="rounded-xl border border-slate-800 bg-[#0a0f1a] p-4">
+            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
           </div>
         ))}
       </section>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section aria-label="Projects" className="rounded-md border border-slate-800 bg-slate-900 p-4">
-          <h2 className="text-sm font-medium text-slate-200">Projects and sources in view</h2>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section aria-label="Projects" className="rounded-xl border border-slate-800 bg-[#0a0f1a] p-4">
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">Projects and sources in view</h2>
           {summary.projects.length === 0 ? (
             <p className="mt-2 text-sm text-slate-400">No projects yet.</p>
           ) : (
@@ -105,8 +114,8 @@ export function OverviewPage() {
             </>
           )}
         </section>
-        <section aria-label="Recent incidents" data-tour="overview-recent" className="rounded-md border border-slate-800 bg-slate-900 p-4">
-          <h2 className="text-sm font-medium text-slate-200">Recent incidents</h2>
+        <section aria-label="Recent incidents" data-tour="overview-recent" className="rounded-xl border border-slate-800 bg-[#0a0f1a] p-4">
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">Recent incidents</h2>
           {recent.length === 0 ? (
             <EmptyState
               title="No incidents yet"

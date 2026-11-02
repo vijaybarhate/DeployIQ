@@ -53,7 +53,17 @@ export function useProductTour() {
       routeRef.current = options.route;
       const instance = driver({
         animate: !prefersReducedMotion(),
+        smoothScroll: true,
+        overlayColor: 'rgba(2, 6, 23, 0.78)',
+        overlayOpacity: 0.78,
+        stagePadding: 8,
+        stageRadius: 12,
+        popoverClass: 'deployiq-tour',
         showProgress: true,
+        progressText: 'Step {{current}} of {{total}}',
+        doneBtnText: 'Done',
+        nextBtnText: 'Next →',
+        prevBtnText: '← Back',
         allowKeyboardControl: true,
         disableActiveInteraction: true,
         skipMissingElement: true,

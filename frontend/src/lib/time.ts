@@ -42,3 +42,10 @@ export function formatDateTime(value: unknown): string {
     `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
   );
 }
+
+/** Local clock time "14:16:05" for live-updated moments; '—' when unavailable. */
+export function formatClockTime(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  const d = new Date(value);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}

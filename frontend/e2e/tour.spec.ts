@@ -22,6 +22,26 @@ async function mockApi(page: Page) {
     if (url.includes('/healthz')) {
       return route.fulfill({ json: { ok: true, service: 'x', docker: { connected: true } } });
     }
+    if (url.includes('/models/check')) {
+      return route.fulfill({
+        json: { model: 'm:free', ok: true, actual_model: 'm:free', latency_ms: 42 },
+      });
+    }
+    if (url.endsWith('/models')) {
+      return route.fulfill({ json: [{ id: 'm:free', name: 'M (free)' }] });
+    }
+    if (url.includes('/docker/containers/')) {
+      return route.fulfill({
+        json: { name: 'c1', lines: ['line one', 'line two'], truncated: false },
+      });
+    }
+    if (url.endsWith('/docker/containers')) {
+      return route.fulfill({
+        json: [
+          { name: 'c1', short_id: 'abc', status: 'running', health: 'healthy', project: 'demo' },
+        ],
+      });
+    }
     if (url.endsWith('/incidents')) {
       return route.fulfill({ json: [incident] });
     }
@@ -50,6 +70,20 @@ test.describe('product tour (desktop)', () => {
     await expect(popover.getByText('Navigate DeployIQ')).toBeVisible();
     await popover.getByRole('button', { name: 'Next' }).click();
     await expect(popover.getByText('Collector status')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(popover).toBeHidden();
+    await expect(button).toBeFocused();
+  });
+
+  test('console tour walks engine pick to diagnosis', async ({ page }) => {
+    await mockApi(page);
+    await page.goto('/console');
+    const { button, popover } = await startTour(page);
+    await expect(popover.getByText('Engine health at a glance')).toBeVisible();
+    // Diagnose step needs an attached container, so the unattended tour shows 5 of 6.
+    await expect(popover.getByText('Step 1 of 5')).toBeVisible();
+    await popover.getByRole('button', { name: 'Next' }).click();
+    await expect(popover.getByText('Three ways in')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(popover).toBeHidden();
     await expect(button).toBeFocused();

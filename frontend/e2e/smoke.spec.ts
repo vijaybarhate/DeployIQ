@@ -9,12 +9,15 @@ import { expect, test } from '@playwright/test';
 test('app loads and incident center handles an unreachable backend', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveTitle(/DeployIQ/);
-  await page.getByRole('link', { name: /Incidents/ }).click();
+  await page.getByRole('link', { name: 'Incidents', exact: true }).click();
   await expect(page).toHaveURL(/\/incidents/);
-  // Backend down: either the error state with retry, or (backend up) incidents.
-  const errorState = page.getByRole('alert');
-  const listOrEmpty = page.locator('ul, div:has-text("No incidents")');
-  await expect(errorState.or(listOrEmpty.first())).toBeVisible({ timeout: 15000 });
+  // Backend down: error state with retry. Backend up: incidents table or
+  // the honest empty state. Scoped to <main> so nav/overview content
+  // cannot satisfy the assertion before navigation completes.
+  const main = page.getByRole('main');
+  await expect(
+    main.getByRole('alert').or(main.getByRole('table')).or(main.getByText(/No incidents/)),
+  ).toBeVisible({ timeout: 15000 });
 });
 
 test('unknown route redirects to overview', async ({ page }) => {

@@ -130,13 +130,13 @@ export function InvestigationWorkbench({ incidentId, onInvestigated, onCiteEvide
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-slate-200">Investigation workbench</h2>
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">Investigation workbench</h2>
         <button
           type="button"
           onClick={onInvestigate}
           disabled={triggering}
           data-tour="workbench-trigger"
-          className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+          className="min-h-[44px] cursor-pointer rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {triggering ? 'Investigating…' : 'Run AI investigation'}
         </button>

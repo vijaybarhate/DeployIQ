@@ -9,8 +9,9 @@ import {
 } from './tourSteps';
 
 describe('stepsForRoute', () => {
-  it('maps overview, center, and details routes', () => {
+  it('maps overview, console, center, and details routes', () => {
     expect(stepsForRoute('/overview').route).toBe('overview');
+    expect(stepsForRoute('/console').route).toBe('console');
     expect(stepsForRoute('/incidents').route).toBe('incidents');
     expect(stepsForRoute('/incidents/abc').route).toBe('incident-details');
   });
@@ -20,7 +21,7 @@ describe('stepsForRoute', () => {
   });
 
   it('covers every tour hook used in the UI exactly once per route', () => {
-    for (const path of ['/overview', '/incidents', '/incidents/x']) {
+    for (const path of ['/overview', '/console', '/incidents', '/incidents/x']) {
       const { steps } = stepsForRoute(path);
       expect(steps.length).toBeGreaterThan(0);
       const hooks = steps.map((s) => s.element);
@@ -29,6 +30,13 @@ describe('stepsForRoute', () => {
         expect(h.startsWith('[data-tour="')).toBe(true);
       }
     }
+  });
+
+  it('walks the full console flow from engine pick to diagnosis', () => {
+    const { steps } = stepsForRoute('/console');
+    const hooks = steps.map((s) => s.element);
+    expect(hooks).toContain('[data-tour="console-engine"]');
+    expect(hooks).toContain('[data-tour="console-diagnose"]');
   });
 
   it('keeps workbench report copy honest about conditional display', () => {

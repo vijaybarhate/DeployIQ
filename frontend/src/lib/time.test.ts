@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseInstant, elapsedSeconds, formatElapsed, formatDateTime } from './time';
+import { parseInstant, elapsedSeconds, formatElapsed, formatDateTime, formatClockTime } from './time';
 
 describe('parseInstant', () => {
   it('parses ISO timestamps to epoch ms', () => {
@@ -48,5 +48,14 @@ describe('formatDateTime', () => {
     expect(formatDateTime('not-a-date')).toBe('not-a-date');
     expect(formatDateTime(null)).toBe('—');
     expect(formatDateTime('')).toBe('—');
+  });
+});
+
+describe('formatClockTime', () => {
+  it('renders local HH:MM:SS and never fabricates', () => {
+    expect(formatClockTime(Date.parse('2026-11-01T14:16:05'))).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    expect(formatClockTime(null)).toBe('—');
+    expect(formatClockTime(undefined)).toBe('—');
+    expect(formatClockTime(Number.NaN)).toBe('—');
   });
 });

@@ -7,13 +7,13 @@ export interface TourStep {
   description: string;
 }
 
-export type TourRoute = 'overview' | 'incidents' | 'incident-details';
+export type TourRoute = 'overview' | 'console' | 'incidents' | 'incident-details';
 
 const OVERVIEW_STEPS: TourStep[] = [
   {
     element: '[data-tour="tour-nav"]',
     title: 'Navigate DeployIQ',
-    description: 'Move between the operational overview and the Incident Center.',
+    description: 'Overview for status, Ops Console for live Docker work, Incident Center for triage.',
   },
   {
     element: '[data-tour="overview-collector"]',
@@ -29,6 +29,40 @@ const OVERVIEW_STEPS: TourStep[] = [
     element: '[data-tour="overview-recent"]',
     title: 'Recent incidents',
     description: 'Jump straight to an incident to inspect it and run an investigation.',
+  },
+];
+
+const CONSOLE_STEPS: TourStep[] = [
+  {
+    element: '[data-tour="console-engine"]',
+    title: 'Engine health at a glance',
+    description:
+      'Pick any free model. DeployIQ pings it immediately — green means live, red means down. Only verified picks are used for investigations.',
+  },
+  {
+    element: '[data-tour="console-tabs"]',
+    title: 'Three ways in',
+    description: 'Stream live Docker logs, paste logs manually, or ask the SRE Copilot — all from this rail.',
+  },
+  {
+    element: '[data-tour="console-attach"]',
+    title: 'Attach and stream',
+    description: 'Type a container name and attach. The tail is read-only — nothing ever executes inside your containers.',
+  },
+  {
+    element: '[data-tour="console-containers"]',
+    title: 'Detected containers',
+    description: 'Every container the daemon reports. View Logs to stream, Diagnose to record an incident straight from the tail.',
+  },
+  {
+    element: '[data-tour="console-terminal"]',
+    title: 'Live terminal',
+    description: 'Line-numbered tail that refreshes itself every 10 seconds, plus on window focus. The timestamp shows the last refresh.',
+  },
+  {
+    element: '[data-tour="console-diagnose"]',
+    title: 'From logs to root cause',
+    description: 'Diagnose records one deduplicated incident, Investigate runs the AI with your picked engine, and the report downloads as .docx.',
   },
 ];
 
@@ -98,11 +132,18 @@ const DETAILS_STEPS: TourStep[] = [
       'Completed reports link each finding to evidence and runbook references. ' +
       'Recommendations that need approval are labeled. Shown only when a completed report exists.',
   },
+  {
+    element: '[data-tour="workbench-download"]',
+    title: 'Take the report with you',
+    description:
+      'Every finished investigation downloads as a formatted .docx file — ready for your professor or your incident review. Shown only on terminal states.',
+  },
 ];
 
 /** Picks the step list for a pathname. Unknown routes get no tour. */
 export function stepsForRoute(pathname: string): { route: TourRoute | null; steps: TourStep[] } {
   if (pathname === '/overview') return { route: 'overview', steps: OVERVIEW_STEPS };
+  if (pathname === '/console') return { route: 'console', steps: CONSOLE_STEPS };
   if (pathname === '/incidents') return { route: 'incidents', steps: INCIDENTS_STEPS };
   if (pathname.startsWith('/incidents/')) return { route: 'incident-details', steps: DETAILS_STEPS };
   return { route: null, steps: [] };
