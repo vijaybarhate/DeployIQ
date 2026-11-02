@@ -1,6 +1,5 @@
 """Centralized configuration. Secrets come from the environment / .env only."""
 
-import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -38,6 +37,18 @@ class Settings(BaseSettings):
 
     # --- OpenRouter (M3.2) ---
     openrouter_api_key: str = ""
+    # Pooled keys for multi-key availability (teammates' keys). Declared as
+    # fields (not os.environ lookups) so values from the documented .env file
+    # actually reach the pool; plain environ lookups would miss dotenv-only vars.
+    openrouter_api_key1: str = ""
+    openrouter_api_key2: str = ""
+    openrouter_api_key3: str = ""
+    openrouter_api_key4: str = ""
+    openrouter_api_key5: str = ""
+    openrouter_api_key6: str = ""
+    openrouter_api_key7: str = ""
+    openrouter_api_key8: str = ""
+    openrouter_api_key9: str = ""
     openrouter_model: str = ""
     # Comma-separated free-model fallbacks, e.g. "vendor/model:free,...".
     # Paid models must never appear here; the live test enforces the :free rule.
@@ -68,7 +79,7 @@ class Settings(BaseSettings):
         """
         keys: list[str] = []
         candidates = [self.openrouter_api_key] + [
-            os.environ.get(f"OPENROUTER_API_KEY{i}", "") for i in range(1, 10)
+            getattr(self, f"openrouter_api_key{i}", "") for i in range(1, 10)
         ]
         for raw in candidates:
             cleaned = (raw or "").strip()

@@ -133,10 +133,19 @@ async def list_free_models() -> list[dict]:
             raise RuntimeError("empty free catalog")
     except Exception as exc:
         log.warning("free-model catalog unavailable, using fallback: %s", exc)
+        # Fail closed on refresh errors too: a stale verified set must not
+        # keep authorizing ids the catalogue no longer vouches for.
+        _cache["verified"] = []
         return [dict(e) for e in STATIC_FALLBACK]
     _cache["at"] = now
     _cache["items"] = [{"id": e["id"], "name": e["name"]} for e in items]
     _cache["verified"] = [str(e["id"]) for e in items]
+    # The documented free router is explicitly supported by the gate, so it
+    # must stay selectable even when the catalogue fetch succeeds.
+    if all(e["id"] != "openrouter/free" for e in _cache["items"]):
+        _cache["items"] = [{"id": "openrouter/free", "name": "OpenRouter Free Router"}] + _cache[
+            "items"
+        ]
     configured = settings.openrouter_model.strip()
     if configured and configured in _cache["verified"]:
         if all(e["id"] != configured for e in items):
@@ -161,6 +170,22 @@ async def ensure_verified_free_model(model_id: str) -> str:
     if cleaned and cleaned in _cache["verified"]:
         return cleaned
     raise ValueError(f"model is not a verified free model: {model_id!r}")
+
+
+async def resolve_verified_model(model_override: str | None) -> str:
+    """One shared resolution for investigations, Copilot and health checks.
+
+    Explicit override wins; otherwise the configured default is used —
+    but the default goes through the same catalogue verification instead
+    of being trusted on syntax alone. Raises ValueError (HTTP 422).
+    """
+    settings = get_settings()
+    if model_override:
+        return await ensure_verified_free_model(model_override)
+    default = (settings.openrouter_model or "").strip()
+    if not default:
+        raise ValueError("no model configured and no override supplied")
+    return await ensure_verified_free_model(default)
 
 
 CHECK_SYSTEM = 'Reply with exactly this JSON object and nothing else: {"ok": true}'

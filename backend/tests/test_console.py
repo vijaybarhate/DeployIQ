@@ -267,7 +267,8 @@ def test_models_filters_non_free(monkeypatch):
     # Bypass cache by clearing right before (fetch runs, filters, sorts).
     items = asyncio.run(model_service.list_free_models())
     ids = [e["id"] for e in items]
-    assert ids == ["b/model:free"]  # paid + auto-router rejected despite zero pricing
+    # The documented free router is always listed; paid/auto entries rejected.
+    assert ids == ["openrouter/free", "b/model:free"]
     model_service.clear_catalog_cache()
 
 
@@ -511,6 +512,7 @@ def test_models_status_ranks_live_first(monkeypatch):
         ("m-fast:free", "live"),
         ("m-limited:free", "limited"),
         ("m-slow:free", "slow"),
+        ("openrouter/free", "down"),
         ("m-dead:free", "down"),
     ]
     assert body[0]["latency_ms"] == 100
@@ -523,11 +525,43 @@ def test_models_status_ranks_live_first(monkeypatch):
     model_service.clear_catalog_cache()
 
 
-def test_trigger_rejects_paid_model_override():
+def test_trigger_rejects_paid_model_override(_verified_catalog):
     incident_id = uuid.uuid4()
     r = client.post(
         f"/api/v1/incidents/{incident_id}/investigations", json={"model": "vendor/paid"}
     )
+    assert r.status_code == 422, r.text
+
+
+def _fake_settings(monkeypatch, model="", fallbacks=()):
+    import types
+
+    import app.services.investigation as _inv
+
+    fake = types.SimpleNamespace(
+        openrouter_model=model,
+        openrouter_api_key="k",
+        openrouter_base_url="http://x",
+        openrouter_timeout_seconds=5.0,
+        openrouter_max_output_tokens=10,
+        openrouter_max_input_chars=100,
+        fallback_model_list=list(fallbacks),
+        prompt_version="rca-v1",
+    )
+    monkeypatch.setattr(model_service, "get_settings", lambda: fake)
+    monkeypatch.setattr(_inv, "get_settings", lambda: fake)
+    return fake
+
+
+def test_trigger_rejects_unverified_configured_default(monkeypatch, _verified_catalog):
+    _fake_settings(monkeypatch, model="vendor/paid")
+    r = client.post(f"/api/v1/incidents/{uuid.uuid4()}/investigations", json={})
+    assert r.status_code == 422, r.text
+
+
+def test_trigger_rejects_unverified_fallback(monkeypatch, _verified_catalog):
+    _fake_settings(monkeypatch, model="m:free", fallbacks=["shady:free"])
+    r = client.post(f"/api/v1/incidents/{uuid.uuid4()}/investigations", json={})
     assert r.status_code == 422, r.text
 
 
@@ -574,7 +608,7 @@ def test_manual_ingest_out_of_scope():
     assert r.status_code == 403, r.text
 
 
-def test_copilot_validation():
+def test_copilot_validation(_verified_catalog):
     r = client.post("/api/v1/copilot/ask", json={"question": ""})
     assert r.status_code == 422
     # Paid model rejected once validation is reached: seed an incident so the
@@ -594,7 +628,26 @@ def test_copilot_validation():
     assert r.status_code == 404, r.text
 
 
-def test_copilot_insufficient_context_without_llm(monkeypatch):
+def test_copilot_paid_override_rejected_without_context(_verified_catalog):
+    # Policy runs before grounding: no incident, no runbooks — still 422.
+    r = client.post("/api/v1/copilot/ask", json={"question": "hi", "model": "vendor/paid"})
+    assert r.status_code == 422, r.text
+
+
+@pytest.fixture
+def _accept_all_models(monkeypatch):
+    """Grounding tests assume policy passes; policy itself is tested elsewhere."""
+
+    async def _ok(model_id=None):
+        cleaned = (model_id or "").strip()
+        if not cleaned:
+            raise ValueError("empty")
+        return cleaned
+
+    monkeypatch.setattr(model_service, "ensure_verified_free_model", _ok)
+
+
+def test_copilot_insufficient_context_without_llm(monkeypatch, _accept_all_models):
     async def _boom(*args, **kwargs):
         raise AssertionError("LLM must not be called without grounding")
 
@@ -607,7 +660,7 @@ def test_copilot_insufficient_context_without_llm(monkeypatch):
     assert "Not enough context" in body["answer"]
 
 
-def test_copilot_grounds_ids_and_clamps_confidence(monkeypatch):
+def test_copilot_grounds_ids_and_clamps_confidence(monkeypatch, _accept_all_models):
     from app.llm.base import LLMCompletion, TokenUsage
     from app.rag.schemas import RetrievalResult
     from app.services import copilot as copilot_service

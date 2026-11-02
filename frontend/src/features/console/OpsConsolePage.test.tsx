@@ -236,10 +236,40 @@ describe('OpsConsolePage', () => {
     expect(posts.some((p) => p.body.includes('"project_id":"my-proj"'))).toBe(true);
   });
 
-  it('shows the recorded incident in the right diagnostic panel', async () => {
+  function mockConsoleFlow() {
+    const posted = { manual: false, investigation: false };
+    const completed = {
+      id: 'inv-1',
+      incident_id: 'inc-9',
+      status: 'completed',
+      requested_model: 'm:free',
+      actual_model: 'm:free',
+      prompt_version: 'rca-v1',
+      result: {
+        root_cause: 'division by zero in handler',
+        explanation: 'boom',
+        severity_assessment: null,
+        confidence_estimate: null,
+        findings: [],
+        recommendations: [],
+        verification_steps: [],
+        limitations: '',
+      },
+      evidence_snapshot: [],
+      runbook_snapshot: [],
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+      duration_ms: 100,
+      error_code: '',
+      error_message: '',
+      created_at: '2026-01-01T00:00:00Z',
+      started_at: null,
+      completed_at: '2026-01-01T00:00:01Z',
+    };
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.includes('/models/check')) {
           return { ok: true, status: 200, statusText: 'OK', json: async () => ({}) } as Response;
@@ -248,13 +278,21 @@ describe('OpsConsolePage', () => {
           return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
         }
         if (url.endsWith('/incidents/manual')) {
+          posted.manual = true;
           return {
             ok: true, status: 201, statusText: 'Created',
             json: async () => ({ id: 'inc-9', title: 'boom incident' }),
           } as Response;
         }
+        if (url.includes('/investigations') && init?.method === 'POST') {
+          posted.investigation = true;
+          return { ok: true, status: 201, statusText: 'Created', json: async () => completed } as Response;
+        }
         if (url.includes('/investigations')) {
-          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+          return {
+            ok: true, status: 200, statusText: 'OK',
+            json: async () => (posted.investigation ? [completed] : []),
+          } as Response;
         }
         if (url.includes('/logs')) {
           return {
@@ -280,10 +318,28 @@ describe('OpsConsolePage', () => {
         } as Response;
       }),
     );
+    return posted;
+  }
+
+  it('shows the recorded incident in the right diagnostic panel', async () => {
+    const posted = mockConsoleFlow();
     renderPage();
     await screen.findByText('c1');
     fireEvent.click(screen.getByRole('button', { name: 'Diagnose' }));
     expect(await screen.findByText(/recorded/)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Investigate/ })).toBeInTheDocument();
+    expect(posted.manual).toBe(true);
+  });
+
+  it('shows the completed report with DOCX download after investigating', async () => {
+    mockConsoleFlow();
+    renderPage();
+    await screen.findByText('c1');
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnose' }));
+    await screen.findByRole('button', { name: /Investigate/ });
+    fireEvent.click(screen.getByRole('button', { name: /Investigate/ }));
+    expect(await screen.findByText('division by zero in handler')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Download report/ });
+    expect(link.getAttribute('href')).toContain('/report');
   });
 });

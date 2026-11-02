@@ -113,6 +113,18 @@ def _stub_pipeline(key):
 _svc._get_pipeline = _stub_pipeline  # type: ignore[method-assign]
 
 
+@pytest.fixture(autouse=True)
+def _verified_default_model(monkeypatch):
+    """Policy is covered in test_console; these flow tests assume a verified default."""
+    import app.services.models as _models
+
+    async def _ok(model_id=None):
+        cleaned = (model_id or "").strip()
+        return cleaned or "default:free"
+
+    monkeypatch.setattr(_models, "ensure_verified_free_model", _ok)
+
+
 def _seed_incident() -> uuid.UUID:
     session = TestingSession()
     inc = Incident(

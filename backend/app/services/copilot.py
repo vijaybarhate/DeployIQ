@@ -45,15 +45,14 @@ def _clamp_confidence(value) -> float | None:  # type: ignore[no-untyped-def]
 
 
 async def _provider(model_override: str | None) -> OpenRouterProvider:
-    from app.services.models import ensure_verified_free_model
+    from app.services.models import ensure_verified_free_model, resolve_verified_model
 
     settings = get_settings()
-    # Single shared catalogue gate (same as investigations + /models/check).
-    model = (
-        await ensure_verified_free_model(model_override)
-        if model_override
-        else settings.openrouter_model
-    )
+    # Single shared catalogue gate: override or configured default, plus
+    # every configured fallback. Same gate as investigations + /models/check.
+    model = await resolve_verified_model(model_override)
+    for fallback in settings.fallback_model_list:
+        await ensure_verified_free_model(fallback)
     return OpenRouterProvider(
         api_key=settings.openrouter_api_key,
         model=model,
@@ -76,6 +75,11 @@ async def ask(
         raise ValueError("question must not be empty")
     if len(cleaned) > MAX_QUESTION_CHARS:
         raise ValueError("question too long")
+    # Model policy first: a paid or unverified override is rejected (422)
+    # even when there is no grounding context to answer from.
+    from app.services.models import resolve_verified_model
+
+    await resolve_verified_model(model_override)
     context_parts: list[str] = []
     valid_evidence_ids: set[str] = set()
     if incident_id is not None:
@@ -94,9 +98,7 @@ async def ask(
             label = f"E-{i + 1:03d}"
             valid_evidence_ids.add(label)
             if isinstance(entry, dict):
-                labeled.append(
-                    f"[{label}] {entry.get('kind', '')}: {entry.get('summary', '')}"
-                )
+                labeled.append(f"[{label}] {entry.get('kind', '')}: {entry.get('summary', '')}")
             else:
                 labeled.append(f"[{label}] {entry}")
         context_parts.append("EVIDENCE " + " | ".join(labeled)[:3000])

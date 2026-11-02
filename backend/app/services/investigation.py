@@ -100,14 +100,15 @@ async def run_investigation(
     session: Session, incident_id: uuid.UUID, model_override: str | None = None
 ) -> Investigation:
     settings = get_settings()
-    # Catalogue verification before creating any record (ValueError -> 422,
-    # no orphan pending row). Single shared gate with /models/check + copilot.
-    from app.services.models import ensure_verified_free_model
+    # Single shared catalogue gate (override or configured default, plus
+    # every configured fallback) before creating any record (ValueError ->
+    # 422, no orphan pending row). Same gate as /models/check + copilot.
+    from app.services.models import ensure_verified_free_model, resolve_verified_model
 
-    verified_override = (
-        await ensure_verified_free_model(model_override) if model_override else None
-    )
-    pipeline_key = _pipeline_key(verified_override)
+    verified_model = await resolve_verified_model(model_override)
+    for fallback in settings.fallback_model_list:
+        await ensure_verified_free_model(fallback)
+    pipeline_key = _pipeline_key(verified_model)
     incident = session.get(Incident, incident_id)
     if incident is None:
         raise KeyError(f"incident not found: {incident_id}")
@@ -115,7 +116,7 @@ async def run_investigation(
     record = Investigation(
         incident_id=incident.id,
         status="pending",
-        requested_model=verified_override or settings.openrouter_model,
+        requested_model=verified_model,
         prompt_version=settings.prompt_version,
     )
     session.add(record)

@@ -6,20 +6,30 @@ left, incident diagnostic + AI report on the right). Capabilities covered:
 free-model engine picker with live health check, manual log ingestion, SRE
 Copilot grounded Q&A, per-investigation model override, .docx reports.
 
-## 1. Architecture under demo (implemented, no new backend)
+## 1. Architecture under demo (console + backend services)
 
 ```text
-docker compose (demo/crashme)
-  -> GET /boom => HTTP 500 + ZeroDivisionError traceback on stderr
+docker compose (demo/crashme: ok / boom / dead)
   -> Docker watcher (MONITORED_PROJECTS=deployiq-demo) tails logs,
      normalizes evidence, groups by error_signature (dedup)
-  -> FastAPI: GET /api/v1/incidents, POST .../investigations
+  -> FastAPI:
+       GET /api/v1/docker/containers + /logs (read-only, scope-enforced)
+       POST /api/v1/incidents/manual (evidence extractor, matched lines)
+       POST /api/v1/models + /models/check|/status (verified free catalogue)
+       POST /api/v1/copilot/ask (stateless grounded Q&A, no persistence)
+       POST /api/v1/incidents/{id}/investigations (explicit trigger only)
+       GET  .../investigations/{inv}/report (.docx download)
   -> LangGraph: evidence -> rag (BM25 runbooks) -> root_cause
-     (OpenRouter free-model routing + 1 compatibility retry) -> report
+     (verified free model per pick, 1 compatibility retry) -> report
      (Pydantic validation, snapshots frozen per attempt)
-  -> React: Incident Center + Investigation Workbench (polling, live region,
-     focus restore, keyboard + Escape, retry states)
+  -> React Ops Console (/console): container explorer + live tail (left),
+     incident diagnostic + AI report + .docx (right, nothing auto-runs)
 ```
+
+Investigation calls are synchronous: the trigger request waits for the
+pipeline to finish (pending/running states are visible when a run takes
+longer than the UI poll interval; history refreshes after trigger). There
+is no background queue — no investigation ever starts on its own.
 
 ## 2. Exact reproducible setup (Windows PowerShell)
 
@@ -101,10 +111,12 @@ Health endpoints (do not confuse them):
    -> 500 live in front of the audience; show the traceback in the console
    tail. Incident Center: ONE ZeroDivisionError incident; boom again ->
    observation count grows, still ONE incident (dedup story).
-4. (4:30) Open the incident -> Run AI investigation -> Queued -> Running
-   (elapsed clock, verified engine label) -> Completed. Report: root cause,
-   finding chips (E-00x/RB-00x) -> click citation (focus jumps, panel opens),
-   approval-required recommendation, Download .docx.
+4. (4:30) In the console right panel: Diagnose recorded it -> press Investigate
+    (the trigger waits for the pipeline; on slow runs the status polls as
+    running). Completed report shows root cause, finding chips (E-00x/RB-00x)
+    -> click a citation (focus jumps, panel opens), approval-required
+    recommendation, and Download report (.docx). Same flow works from the
+    incident details page workbench.
 5. (7:00) **Case 3 — hard crash:** `crashme-dead` already Exited(1) — its
    exit-code incident appeared with zero clicks. Re-run the death live:
    `docker compose -f demo/docker-compose.yml restart crashme-dead`, wait

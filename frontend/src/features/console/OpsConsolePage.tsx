@@ -99,7 +99,7 @@ export function OpsConsolePage() {
   const [error, setError] = useState<string | null>(null);
   const [madeIncident, setMadeIncident] = useState<Incident | null>(null);
 
-  const [manualProject, setManualProject] = useState('deployiq-demo');
+  const [manualProject, setManualProject] = useState('');
   const [manualContainer, setManualContainer] = useState('');
   const [manualText, setManualText] = useState('');
 
@@ -287,11 +287,21 @@ export function OpsConsolePage() {
     setBusy('investigate');
     setError(null);
     try {
+      // The endpoint is synchronous: it returns only after the run finishes,
+      // so the returned record (or persisted failure) must be pulled into
+      // history explicitly — otherwise the panel stays stuck on "no
+      // investigations yet" and polling never starts.
       await triggerInvestigation(incidentId, effectiveModel || undefined);
-      setNotice('Investigation started with the selected engine. Open the incident to follow it.');
+      await history.refetch();
+      setNotice('Investigation finished — report below. Open the incident for history and .docx.');
     } catch (err) {
+      // A failed attempt may already be persisted server-side: refresh so
+      // the failure (not silence) is what the panel shows.
+      await history.refetch().catch(() => undefined);
       if (err instanceof ApiError && err.status === 422) {
         setError(`Model rejected: ${err.message}`);
+      } else if (err instanceof ApiError && err.status === 409) {
+        setError('An investigation is already active for this incident. History refreshed.');
       } else {
         setError(err instanceof Error ? err.message : 'Investigation failed');
       }
@@ -304,9 +314,17 @@ export function OpsConsolePage() {
     setBusy('manual');
     setError(null);
     setNotice(null);
+    const project = manualProject.trim();
+    if (!project) {
+      // No silent default: pasted logs must be attributed explicitly,
+      // otherwise they land in the wrong project's incidents.
+      setError('Project is required — type the Compose project these logs came from.');
+      setBusy(null);
+      return;
+    }
     try {
       const incident = await manualIngest({
-        project_id: manualProject.trim() || 'deployiq-demo',
+        project_id: project,
         raw_logs: manualText,
         container_name: manualContainer.trim() || undefined,
       });
@@ -751,9 +769,10 @@ export function OpsConsolePage() {
                     <input
                       value={manualProject}
                       onChange={(e) => setManualProject(e.target.value)}
+                      placeholder="deployiq-demo"
                       spellCheck={false}
                       autoComplete="off"
-                      className="mt-1 min-h-[40px] w-full rounded-lg border border-hairline bg-raised px-2.5 py-1.5 font-mono text-[13px]"
+                      className="mt-1 min-h-[40px] w-full rounded-lg border border-hairline bg-raised px-2.5 py-1.5 font-mono text-[13px] placeholder:text-muted"
                     />
                   </label>
                   <label className="text-xs font-medium text-body">
