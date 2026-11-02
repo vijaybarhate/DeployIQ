@@ -50,11 +50,12 @@ async def _provider(model_override: str | None) -> OpenRouterProvider:
     settings = get_settings()
     # Single shared catalogue gate: override or configured default, plus
     # every configured fallback. Same gate as investigations + /models/check.
+    # All calls fan out across the pooled server keys with failover.
     model = await resolve_verified_model(model_override)
     for fallback in settings.fallback_model_list:
         await ensure_verified_free_model(fallback)
     return OpenRouterProvider(
-        api_key=settings.openrouter_api_key,
+        api_key=settings.openrouter_api_keys,
         model=model,
         fallback_models=settings.fallback_model_list,
         base_url=settings.openrouter_base_url,

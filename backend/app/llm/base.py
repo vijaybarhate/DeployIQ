@@ -42,11 +42,15 @@ class LLMError(RuntimeError):
         message: str,
         model: str = "",
         usage: TokenUsage | None = None,
+        status: int | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.model = model
         self.usage = usage or TokenUsage()
+        # Raw HTTP status when the failure came from one (None for timeouts,
+        # transport errors and malformed output). Used for key failover.
+        self.status = status
 
 
 @dataclass(frozen=True)

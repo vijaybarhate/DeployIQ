@@ -389,23 +389,19 @@ def _pooled_settings(monkeypatch, keys):
     return fake
 
 
-def test_check_fails_over_to_next_key_on_rate_limit(monkeypatch, _verified_catalog):
+def test_check_model_uses_pooled_provider(monkeypatch, _verified_catalog):
     import asyncio
 
-    from app.llm.base import LLMCompletion, LLMError, LLMErrorCode, TokenUsage
+    from app.llm.base import LLMCompletion, TokenUsage
 
     _pooled_settings(monkeypatch, ["k1", "k2"])
-    model_service._reset_key_rotation()
-    seen: list[str] = []
+    seen: list = []
 
     class _FakeProvider:
         def __init__(self, **kwargs):
-            self._key = kwargs.get("api_key", "")
+            seen.append(kwargs.get("api_key", []))
 
         async def complete_json(self, system_prompt, user_prompt):
-            seen.append(self._key)
-            if self._key == "k1":
-                raise LLMError(LLMErrorCode.RATE_LIMITED, "limited")
             return LLMCompletion(
                 parsed={"ok": True}, actual_model="m:free", usage=TokenUsage(), latency_ms=10
             )
@@ -413,57 +409,8 @@ def test_check_fails_over_to_next_key_on_rate_limit(monkeypatch, _verified_catal
     monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FakeProvider)
     out = asyncio.run(model_service.check_model("m:free"))
     assert out["ok"] is True
-    assert seen[0] == "k1" and seen[-1] == "k2"  # exhausted key skipped, next key answered
-
-
-def test_check_reports_all_keys_exhausted(monkeypatch, _verified_catalog):
-    import asyncio
-
-    import pytest as _pytest
-
-    from app.llm.base import LLMError, LLMErrorCode
-
-    _pooled_settings(monkeypatch, ["k1", "k2"])
-    model_service._reset_key_rotation()
-
-    class _FailingProvider:
-        def __init__(self, **kwargs):
-            pass
-
-        async def complete_json(self, system_prompt, user_prompt):
-            raise LLMError(LLMErrorCode.RATE_LIMITED, "limited")
-
-    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FailingProvider)
-    with _pytest.raises(LLMError) as excinfo:
-        asyncio.run(model_service.check_model("m:free"))
-    assert excinfo.value.code == LLMErrorCode.RATE_LIMITED
-    assert "all 2 keys" in str(excinfo.value)
-
-
-def test_key_rotation_spreads_load(monkeypatch, _verified_catalog):
-    import asyncio
-
-    from app.llm.base import LLMCompletion, TokenUsage
-
-    _pooled_settings(monkeypatch, ["k1", "k2", "k3"])
-    model_service._reset_key_rotation()
-    seen: list[str] = []
-
-    class _FakeProvider:
-        def __init__(self, **kwargs):
-            self._key = kwargs.get("api_key", "")
-
-        async def complete_json(self, system_prompt, user_prompt):
-            seen.append(self._key)
-            return LLMCompletion(
-                parsed={"ok": True}, actual_model="m:free", usage=TokenUsage(), latency_ms=10
-            )
-
-    monkeypatch.setattr("app.llm.openrouter.OpenRouterProvider", _FakeProvider)
-    asyncio.run(model_service.check_model("m:free"))
-    asyncio.run(model_service.check_model("m:free"))
-    asyncio.run(model_service.check_model("m:free"))
-    assert seen == ["k1", "k2", "k3"]
+    # The full pool reaches the provider; it owns start order + failover.
+    assert seen == [["k1", "k2"]]
 
 
 def test_api_keys_property_collects_numbered_keys(monkeypatch):

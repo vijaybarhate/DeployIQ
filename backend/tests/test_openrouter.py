@@ -47,6 +47,92 @@ def _provider(transport, model="vendor/model:free", fallbacks=None):
     )
 
 
+def _keyed_provider(keys, handler):
+    OpenRouterProvider.reset_key_rotation()
+    return OpenRouterProvider(
+        api_key=keys, model="vendor/model:free", transport=httpx.MockTransport(handler)
+    )
+
+
+def _key_of(request: httpx.Request) -> str:
+    auth = request.headers.get("Authorization", "")
+    return auth[7:] if auth.startswith("Bearer ") else ""
+
+
+def test_key_failover_on_rate_limit():
+    """A 429 on the first key fails over to the next; verdict still succeeds."""
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        key = _key_of(request)
+        seen.append(key)
+        if key == "k1":
+            return httpx.Response(429, json={})
+        return _ok_response(request)
+
+    completion = _await(_keyed_provider(["k1", "k2"], handler).complete_json("s", "u"))
+    assert completion.parsed["root_cause"] == "db down"
+    assert seen == ["k1", "k2"]
+
+
+def test_dead_key_skipped_with_401():
+    """An invalid key (401) is skipped, not fatal."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if _key_of(request) == "k1":
+            return httpx.Response(401, json={})
+        return _ok_response(request)
+
+    completion = _await(_keyed_provider(["k1", "k2"], handler).complete_json("s", "u"))
+    assert completion.parsed["root_cause"] == "db down"
+
+
+def test_all_keys_exhausted_reports_count():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={})
+
+    with pytest.raises(LLMError) as exc:
+        _await(_keyed_provider(["k1", "k2"], handler).complete_json("s", "u"))
+    assert exc.value.code == LLMErrorCode.RATE_LIMITED
+    assert "all 2 keys" in str(exc.value)
+
+
+def test_no_failover_on_billing_or_timeout():
+    """402 and timeouts fail fast instead of burning every key."""
+
+    def billing(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(402, json={})
+
+    with pytest.raises(LLMError) as exc:
+        _await(_keyed_provider(["k1", "k2"], billing).complete_json("s", "u"))
+    assert exc.value.code == LLMErrorCode.AUTH
+
+    def slow(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("slow", request=request)
+
+    with pytest.raises(LLMError) as exc:
+        _await(_keyed_provider(["k1", "k2"], slow).complete_json("s", "u"))
+    assert exc.value.code == LLMErrorCode.TIMEOUT
+
+
+def test_round_robin_spreads_load_across_keys():
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(_key_of(request))
+        return _ok_response(request)
+
+    OpenRouterProvider.reset_key_rotation()
+    for _ in range(3):
+        provider = OpenRouterProvider(
+            api_key=["k1", "k2", "k3"],
+            model="vendor/model:free",
+            transport=httpx.MockTransport(handler),
+        )
+        _await(provider.complete_json("s", "u"))
+    assert seen == ["k1", "k2", "k3"]
+
+
 def test_success_records_model_usage_latency():
     completion = _await(
         _provider(httpx.MockTransport(_ok_response)).complete_json("system", "user")

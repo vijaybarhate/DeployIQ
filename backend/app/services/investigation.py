@@ -44,7 +44,7 @@ def get_retriever() -> BM25Retriever:
     return BM25Retriever(load_runbooks(RUNBOOK_DIR))
 
 
-def _pipeline_key(model_override: str | None = None) -> tuple:
+def _pipeline_key(model_override: str | None = None, api_keys: tuple = ()) -> tuple:
     from app.llm.base import is_free_model
 
     settings = get_settings()
@@ -52,7 +52,9 @@ def _pipeline_key(model_override: str | None = None) -> tuple:
         # Syntax backstop only: catalogue verification happens in
         # run_investigation before any record is created.
         raise ValueError(f"model must be an explicit free model id, got: {model_override!r}")
-    key_hash = hashlib.sha256(settings.openrouter_api_key.encode("utf-8")).hexdigest()[:16]
+    key_hash = hashlib.sha256(
+        "|".join(api_keys or [settings.openrouter_api_key]).encode("utf-8")
+    ).hexdigest()[:16]
     return (
         model_override or settings.openrouter_model,
         tuple(settings.fallback_model_list),
@@ -69,7 +71,7 @@ def _get_pipeline(key: tuple):
     model, fallbacks, max_tokens, base_url, timeout_s, _ = key
     settings = get_settings()
     provider = OpenRouterProvider(
-        api_key=settings.openrouter_api_key,
+        api_key=settings.openrouter_api_keys,
         model=model,
         fallback_models=list(fallbacks),
         base_url=base_url,
@@ -108,7 +110,9 @@ async def run_investigation(
     verified_model = await resolve_verified_model(model_override)
     for fallback in settings.fallback_model_list:
         await ensure_verified_free_model(fallback)
-    pipeline_key = _pipeline_key(verified_model)
+    # Fingerprint includes the pooled keys so adding/rotating a key
+    # rebuilds the pipeline instead of reusing a stale provider.
+    pipeline_key = _pipeline_key(verified_model, tuple(settings.openrouter_api_keys))
     incident = session.get(Incident, incident_id)
     if incident is None:
         raise KeyError(f"incident not found: {incident_id}")

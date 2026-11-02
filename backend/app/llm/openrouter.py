@@ -18,10 +18,25 @@ class OpenRouterProvider:
     """Async OpenRouter client. Exactly one generation request per call, plus at
     most one retry when the provider explicitly rejects `response_format`."""
 
+    # Round-robin start across pooled keys (spreads load instead of always
+    # burning the first key). Guarded by the GIL for simple increments.
+    _key_cursor = 0
+
+    @classmethod
+    def _next_key_start(cls, count: int) -> int:
+        idx = cls._key_cursor % max(count, 1)
+        cls._key_cursor += 1
+        return idx
+
+    @classmethod
+    def reset_key_rotation(cls) -> None:
+        """Test seam: restart round-robin from the first key."""
+        cls._key_cursor = 0
+
     def __init__(
         self,
         *,
-        api_key: str,
+        api_key: str | list[str],
         model: str,
         fallback_models: list[str] | None = None,
         base_url: str = "https://openrouter.ai/api/v1",
@@ -29,11 +44,13 @@ class OpenRouterProvider:
         max_output_tokens: int = 1500,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
-        if not api_key:
+        keys = [api_key] if isinstance(api_key, str) else list(api_key)
+        keys = [k for k in keys if (k or "").strip()]
+        if not keys:
             raise LLMError(LLMErrorCode.AUTH, "missing OpenRouter API key")
         if not model:
             raise LLMError(LLMErrorCode.INVALID_RESPONSE, "missing OpenRouter model")
-        self._api_key = api_key
+        self._api_keys = keys
         self._model = model
         self._fallbacks = [m for m in (fallback_models or []) if m]
         self._enforce_free_only([self._model, *self._fallbacks])
@@ -42,9 +59,9 @@ class OpenRouterProvider:
         self._max_output_tokens = max_output_tokens
         self._transport = transport
 
-    def _headers(self) -> dict[str, str]:
+    def _headers(self, api_key: str) -> dict[str, str]:
         return {
-            "Authorization": f"Bearer {self._api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
 
@@ -126,8 +143,45 @@ class OpenRouterProvider:
         message = str(exc).lower()
         return "response_format" in message or "empty content" in message
 
+    # HTTP statuses worth retrying with the NEXT pooled key: a dead or
+    # throttled key must not hide a model that another key can still reach.
+    # Everything else (400 validation, 402 billing, timeouts, transport
+    # errors, malformed output) fails fast so one bad request never burns
+    # every key in turn.
+    _FAILOVER_STATUSES = frozenset({401, 403, 429, 500, 502, 503})
+
+    @staticmethod
+    def _status_of(exc: LLMError) -> int | None:
+        return exc.status
+
     async def _attempt(
         self, system_prompt: str, user_prompt: str, use_json_mode: bool, start: float
+    ) -> LLMCompletion:
+        start_key = self._next_key_start(len(self._api_keys))
+        last_error: LLMError | None = None
+        for attempt in range(len(self._api_keys)):
+            api_key = self._api_keys[(start_key + attempt) % len(self._api_keys)]
+            try:
+                return await self._single_attempt(
+                    api_key, system_prompt, user_prompt, use_json_mode, start
+                )
+            except LLMError as exc:
+                if self._status_of(exc) in self._FAILOVER_STATUSES:
+                    last_error = exc
+                    continue
+                raise
+        assert last_error is not None  # keys non-empty, so loop ran at least once
+        if self._status_of(last_error) == 429:
+            raise LLMError(
+                LLMErrorCode.RATE_LIMITED,
+                f"rate limited on all {len(self._api_keys)} keys",
+                model=last_error.model,
+                usage=last_error.usage,
+            ) from last_error
+        raise last_error
+
+    async def _single_attempt(
+        self, api_key: str, system_prompt: str, user_prompt: str, use_json_mode: bool, start: float
     ) -> LLMCompletion:
         try:
             async with httpx.AsyncClient(
@@ -135,7 +189,7 @@ class OpenRouterProvider:
             ) as client:
                 response = await client.post(
                     CHAT_COMPLETIONS_PATH,
-                    headers=self._headers(),
+                    headers=self._headers(api_key),
                     json=self._payload(system_prompt, user_prompt, use_json_mode),
                 )
         except httpx.TimeoutException as exc:
@@ -145,19 +199,26 @@ class OpenRouterProvider:
         latency_ms = int((time.perf_counter() - start) * 1000)
 
         if response.status_code == 401:
-            raise LLMError(LLMErrorCode.AUTH, "OpenRouter authentication failed (401)")
+            raise LLMError(LLMErrorCode.AUTH, "OpenRouter authentication failed (401)", status=401)
         if response.status_code == 402:
-            raise LLMError(LLMErrorCode.AUTH, "OpenRouter payment required (402): billing issue")
+            raise LLMError(
+                LLMErrorCode.AUTH, "OpenRouter payment required (402): billing issue", status=402
+            )
         if response.status_code == 429:
-            raise LLMError(LLMErrorCode.RATE_LIMITED, "OpenRouter rate limited (429)")
+            raise LLMError(LLMErrorCode.RATE_LIMITED, "OpenRouter rate limited (429)", status=429)
         if response.status_code >= 500:
-            raise LLMError(LLMErrorCode.SERVER, f"OpenRouter server error ({response.status_code})")
+            raise LLMError(
+                LLMErrorCode.SERVER,
+                f"OpenRouter server error ({response.status_code})",
+                status=response.status_code,
+            )
         if response.status_code == 400:
-            raise LLMError(LLMErrorCode.INVALID_RESPONSE, self._error_detail(response))
+            raise LLMError(LLMErrorCode.INVALID_RESPONSE, self._error_detail(response), status=400)
         if response.status_code != 200:
             raise LLMError(
                 LLMErrorCode.INVALID_RESPONSE,
                 f"OpenRouter unexpected status {response.status_code}",
+                status=response.status_code,
             )
         actual_model = ""
         usage = TokenUsage()

@@ -30,25 +30,6 @@ _cache: dict = {"at": 0.0, "items": [], "verified": []}
 _STATUS_TTL_SECONDS = 300.0
 _status_cache: dict = {"at": 0.0, "items": []}
 
-# Round-robin cursor spreads health-ping load across pooled keys instead
-# of always burning the first one.
-_key_lock = asyncio.Lock()
-_key_cursor = 0
-
-
-async def _next_key_start(n: int) -> int:
-    global _key_cursor
-    async with _key_lock:
-        idx = _key_cursor % max(n, 1)
-        _key_cursor += 1
-        return idx
-
-
-def _reset_key_rotation() -> None:
-    """Test seam: restart round-robin from the first key."""
-    global _key_cursor
-    _key_cursor = 0
-
 
 def clear_catalog_cache() -> None:
     _cache["at"] = 0.0
@@ -231,40 +212,37 @@ async def _ping_with_key(model_id: str, api_key: str, timeout_seconds: float):
 async def check_model(model_id: str, timeout_seconds: float | None = None) -> dict:
     """Ping one verified free model with a tiny structured request.
 
-    Strict per-model check: no fallbacks, so the verdict reflects exactly
-    the model the user picked. Keys are pooled with round-robin start and
-    fail over on rate limits: one exhausted key never hides a model that
-    another key can still reach. Raises ValueError for unverified ids (422)
-    and LLMError for provider failures (502).
+    Strict per-model check: no model fallbacks, so the verdict reflects
+    exactly the model the user picked. The provider fans out across the
+    pooled keys (round-robin start, fail over on dead/throttled keys), so
+    one exhausted key never hides a model another key can still reach.
+    Raises ValueError for unverified ids (422) and LLMError for provider
+    failures (502).
     """
-    from app.llm.base import LLMError, LLMErrorCode
+    from app.llm.openrouter import OpenRouterProvider
 
     cleaned = await ensure_verified_free_model(model_id)
     settings = get_settings()
     keys = settings.openrouter_api_keys
     if not keys:
+        from app.llm.base import LLMError, LLMErrorCode
+
         raise LLMError(LLMErrorCode.AUTH, "missing OpenRouter API key")
-    timeout = timeout_seconds or settings.openrouter_timeout_seconds
-    start = await _next_key_start(len(keys))
-    for attempt in range(len(keys)):
-        key = keys[(start + attempt) % len(keys)]
-        try:
-            completion = await _ping_with_key(cleaned, key, timeout)
-        except LLMError as exc:
-            if exc.code == LLMErrorCode.RATE_LIMITED:
-                continue  # fail over: try the next pooled key
-            raise
-        return {
-            "model": cleaned,
-            "ok": True,
-            "actual_model": completion.actual_model,
-            "latency_ms": completion.latency_ms,
-        }
-    raise LLMError(
-        LLMErrorCode.RATE_LIMITED,
-        f"rate_limited on all {len(keys)} keys",
+    provider = OpenRouterProvider(
+        api_key=keys,
         model=cleaned,
+        fallback_models=[],
+        base_url=settings.openrouter_base_url,
+        timeout_seconds=timeout_seconds or settings.openrouter_timeout_seconds,
+        max_output_tokens=300,
     )
+    completion = await provider.complete_json(CHECK_SYSTEM, CHECK_USER)
+    return {
+        "model": cleaned,
+        "ok": True,
+        "actual_model": completion.actual_model,
+        "latency_ms": completion.latency_ms,
+    }
 
 
 _STATUS_ORDER = {"live": 0, "limited": 1, "slow": 2, "down": 3}
