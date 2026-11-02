@@ -426,8 +426,8 @@ export function OpsConsolePage() {
             Operations console
           </h1>
           <p className="mt-1 max-w-xl text-sm text-muted">
-            Docker, evidence, and AI diagnosis in one place. Everything here is read-only
-            until you explicitly record an incident.
+            DeployIQ watches configured Docker projects, groups repeated errors into
+            incidents, and turns captured logs and runbooks into AI-assisted root-cause reports.
           </p>
         </div>
         {/* Status cluster */}
