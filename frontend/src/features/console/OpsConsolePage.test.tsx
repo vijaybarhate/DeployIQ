@@ -112,6 +112,49 @@ describe('OpsConsolePage', () => {
     expect(await screen.findByText('down')).toBeInTheDocument();
   });
 
+  it('filters detected containers by search without hiding data', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/models/check')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => ({}) } as Response;
+        }
+        if (url.includes('/models')) {
+          return { ok: true, status: 200, statusText: 'OK', json: async () => [] } as Response;
+        }
+        if (url.includes('/docker/containers')) {
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: async () => [
+              { name: 'crashme-boom-1', short_id: 'aaa', status: 'running', health: 'healthy', project: 'deployiq-demo' },
+              { name: 'other-thing-1', short_id: 'bbb', status: 'exited', health: '', project: 'other-proj' },
+            ],
+          } as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({ ok: true, service: 'x', docker: { connected: true } }),
+        } as Response;
+      }),
+    );
+    renderPage();
+    await screen.findByText('crashme-boom-1');
+    expect(screen.getByText('other-thing-1')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search containers'), { target: { value: 'boom' } });
+    expect(screen.getByText('crashme-boom-1')).toBeInTheDocument();
+    expect(screen.queryByText('other-thing-1')).not.toBeInTheDocument();
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search containers'), { target: { value: 'zzz-nope' } });
+    expect(screen.getByText(/No containers match/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.getByText('other-thing-1')).toBeInTheDocument();
+  });
+
   it('diagnoses with the container project and guides on clean logs', async () => {
     const posts: Array<{ url: string; body: string }> = [];
     vi.stubGlobal(

@@ -45,6 +45,7 @@ export function OpsConsolePage() {
   const [tab, setTab] = useState<Tab>('live');
   const [target, setTarget] = useState('');
   const [attached, setAttached] = useState<string | null>(null);
+  const [containerQuery, setContainerQuery] = useState('');
   const [tail, setTail] = useState(200);
   const [model, setModel] = useState(loadModel);
   const [busy, setBusy] = useState<string | null>(null);
@@ -208,6 +209,18 @@ export function OpsConsolePage() {
   }
 
   const logLines = logs.data?.lines ?? [];
+
+  // Local filter for the detected list: with many containers on one daemon
+  // (e.g. other projects), typing a few letters beats scrolling.
+  const containerFilter = containerQuery.trim().toLowerCase();
+  const visibleContainers = (containers.data ?? []).filter(
+    (c) =>
+      !containerFilter ||
+      c.name.toLowerCase().includes(containerFilter) ||
+      c.status.toLowerCase().includes(containerFilter) ||
+      (c.project || '').toLowerCase().includes(containerFilter) ||
+      (c.health || '').toLowerCase().includes(containerFilter),
+  );
 
   return (
     <div className="space-y-5">
@@ -414,8 +427,38 @@ export function OpsConsolePage() {
                   ) : (containers.data ?? []).length === 0 ? (
                     <p className="mt-2 text-sm text-slate-400">No containers found.</p>
                   ) : (
-                    <ul className="mt-2 space-y-1.5">
-                      {(containers.data ?? []).map((c) => {
+                    <>
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="search"
+                          aria-label="Search containers"
+                          value={containerQuery}
+                          onChange={(e) => setContainerQuery(e.target.value)}
+                          placeholder="Filter by name, status, project…"
+                          spellCheck={false}
+                          autoComplete="off"
+                          className="min-h-[36px] min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-xs text-slate-100 placeholder:text-slate-600"
+                        />
+                        {containerFilter && (
+                          <span className="flex-none font-mono text-[11px] tabular-nums text-slate-500">
+                            {visibleContainers.length}/{(containers.data ?? []).length}
+                          </span>
+                        )}
+                      </div>
+                      {visibleContainers.length === 0 ? (
+                        <p className="mt-2 text-sm text-slate-400">
+                          No containers match “{containerQuery.trim()}”.{' '}
+                          <button
+                            type="button"
+                            onClick={() => setContainerQuery('')}
+                            className="cursor-pointer underline underline-offset-2 hover:text-slate-200"
+                          >
+                            Clear
+                          </button>
+                        </p>
+                      ) : (
+                      <ul className="mt-2 space-y-1.5">
+                      {visibleContainers.map((c) => {
                         const running = c.status.toLowerCase().includes('run');
                         const isAttached = attached === c.name;
                         return (
@@ -476,7 +519,9 @@ export function OpsConsolePage() {
                           </li>
                         );
                       })}
-                    </ul>
+                      </ul>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
