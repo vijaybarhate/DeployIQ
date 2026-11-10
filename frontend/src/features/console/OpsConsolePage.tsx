@@ -491,7 +491,7 @@ export function OpsConsolePage() {
               setAttached(c.name);
               void diagnoseContainer(c.name, c.project);
             }}
-            className="flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-[13px] font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-xl bg-lavender px-3 py-1.5 text-[13px] font-semibold text-ink transition-colors duration-200 hover:bg-lavender-deep active:bg-press-strong disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Stethoscope className="h-3.5 w-3.5" aria-hidden />
             Diagnose
@@ -513,7 +513,7 @@ export function OpsConsolePage() {
       {/* Page head */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
+          <h1 className="font-display text-[34px] leading-[1.1] font-medium tracking-[-0.02em] text-ink">
             Operations console
           </h1>
           <p className="mt-1 max-w-xl text-sm text-muted">
@@ -585,7 +585,7 @@ export function OpsConsolePage() {
                 role="listbox"
                 aria-label="Free models by live availability"
                 data-engine-list
-                className="terminal-scroll absolute right-0 z-40 mt-2 max-h-80 w-72 overflow-auto rounded-xl border border-hairline bg-raised p-1.5 shadow-2xl shadow-black/60"
+                className="terminal-scroll absolute right-0 z-40 mt-2 max-h-80 w-72 overflow-auto rounded-xl border border-hairline bg-raised p-1.5 shadow-[0_12px_40px_rgba(26,26,26,0.14)]"
               >
                 {rankedModels.length === 0 && (
                   <li className="px-3 py-2 text-xs text-muted">No models loaded yet…</li>
@@ -657,7 +657,7 @@ export function OpsConsolePage() {
                 role="dialog"
                 aria-label="Server API key health"
                 data-key-list
-                className="absolute right-0 z-40 mt-2 w-64 rounded-xl border border-hairline bg-panel p-2 shadow-2xl shadow-black/60"
+                className="absolute right-0 z-40 mt-2 w-64 rounded-xl border border-hairline bg-panel p-2 shadow-[0_12px_40px_rgba(26,26,26,0.14)]"
               >
                 <p className="px-2.5 pb-1 pt-1.5 text-xs text-body">
                   Pooled server keys — values never leave the backend.
@@ -740,9 +740,9 @@ export function OpsConsolePage() {
                   type="button"
                   onClick={() => setTab(id)}
                   aria-pressed={active}
-                  className={`flex min-h-[40px] flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors duration-200 ${
+                  className={`flex min-h-[40px] flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full px-3 py-2 text-[14px] font-semibold transition-colors duration-200 ${
                     active
-                      ? 'bg-emerald-400 text-slate-950'
+                      ? 'bg-lavender text-ink'
                       : 'text-muted hover:bg-raised/70 hover:text-ink'
                   }`}
                 >
@@ -781,7 +781,7 @@ export function OpsConsolePage() {
                     <button
                       type="button"
                       onClick={() => attach(target)}
-                      className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-xl bg-lavender px-3.5 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-lavender-deep active:bg-press-strong disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Attach &amp; Stream
                       <ArrowRight className="h-4 w-4" aria-hidden />
@@ -931,7 +931,7 @@ export function OpsConsolePage() {
                   type="button"
                   onClick={submitManual}
                   disabled={busy === 'manual' || !manualText.trim()}
-                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-[44px] w-full cursor-pointer rounded-xl bg-lavender px-3 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-lavender-deep active:bg-press-strong disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy === 'manual' ? 'Recording…' : 'Record incident'}
                 </button>
@@ -969,7 +969,7 @@ export function OpsConsolePage() {
                   type="button"
                   onClick={ask}
                   disabled={busy === 'copilot' || !copilotQ.trim()}
-                  className="min-h-[44px] w-full cursor-pointer rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-[44px] w-full cursor-pointer rounded-xl bg-lavender px-3 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-lavender-deep active:bg-press-strong disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy === 'copilot' ? 'Asking…' : 'Ask'}
                 </button>
@@ -993,37 +993,37 @@ export function OpsConsolePage() {
 
         {/* LEFT: live terminal tail */}
         <section
-          className="overflow-hidden rounded-xl border border-hairline bg-panel"
+          className="overflow-hidden rounded-[40px] bg-teal text-canvas"
           data-tour="console-terminal"
         >
           {/* Window chrome */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-hairline/80 bg-abyss/60 px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-5 py-3">
             <span className="flex gap-1.5" aria-hidden>
-              <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
-              <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
+              <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
+              <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
               <span
-                className={`h-2.5 w-2.5 rounded-full ${attached ? 'bg-emerald-400/70' : 'bg-slate-700'}`}
+                className={`h-2.5 w-2.5 rounded-full ${attached ? 'bg-lavender' : 'bg-white/25'}`}
               />
             </span>
-            <h2 className="flex min-w-0 flex-1 items-center gap-2 truncate font-mono text-xs text-body">
+            <h2 className="flex min-w-0 flex-1 items-center gap-2 truncate font-mono text-xs text-canvas/70">
               {attached ? (
                 <>
                   <span
-                    className="flex flex-none items-center gap-1 rounded bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-widest text-emerald-300"
+                    className="flex flex-none items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold tracking-widest text-lavender"
                     title="Auto-refreshing every 10s, plus on window focus"
                   >
                     <span className="relative flex h-1.5 w-1.5" aria-hidden>
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70 motion-reduce:animate-none" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-lavender opacity-70 motion-reduce:animate-none" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-lavender" />
                     </span>
                     LIVE
                   </span>
                   <span className="truncate">
-                    live tail — <span className="text-ink">{attached}</span>
+                    live tail — <span className="text-canvas">{attached}</span>
                   </span>
                 </>
               ) : (
-                <span className="text-muted">no container attached</span>
+                <span className="text-canvas/55">no container attached</span>
               )}
             </h2>
             {attached && !logs.isLoading && (
@@ -1041,7 +1041,7 @@ export function OpsConsolePage() {
                 name="tail-lines"
                 aria-label="Log lines to show"
                 onChange={(e) => setTail(Number(e.target.value))}
-                className="cursor-pointer rounded-md border border-hairline bg-raised px-1.5 py-1 text-[11px] text-ink"
+                className="cursor-pointer rounded-md border border-white/20 bg-white/5 px-1.5 py-1 text-[11px] text-canvas"
               >
                 {[100, 200, 500].map((n) => (
                   <option key={n} value={n}>
@@ -1056,7 +1056,7 @@ export function OpsConsolePage() {
               disabled={!attached || logs.isFetching}
               aria-label="Refresh logs"
               title="Refresh logs"
-              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-hairline text-body transition-colors duration-200 hover:bg-raised disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-white/20 text-canvas/70 transition-colors duration-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <RefreshCw
                 className={`h-3.5 w-3.5 ${logs.isFetching ? 'animate-spin' : ''}`}
@@ -1067,17 +1067,17 @@ export function OpsConsolePage() {
 
           {!attached ? (
             <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-hairline bg-raised">
-                <Terminal className="h-5 w-5 text-muted" aria-hidden />
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/5">
+                <Terminal className="h-5 w-5 text-canvas/60" aria-hidden />
               </span>
-              <p className="text-sm font-medium text-ink">Attach a container to stream logs</p>
-              <p className="max-w-sm text-xs leading-relaxed text-muted">
+              <p className="text-sm font-semibold text-canvas">Attach a container to stream logs</p>
+              <p className="max-w-sm text-xs leading-relaxed text-canvas/70">
                 Pick a container on the left, or type its name above. The tail refreshes every 10s
                 and never executes anything inside the container.
               </p>
             </div>
           ) : logs.isLoading ? (
-            <p className="px-4 py-10 text-center font-mono text-xs text-muted">
+            <p className="px-4 py-10 text-center font-mono text-xs text-canvas/60">
               <span className="animate-pulse">▊ connecting to {attached}…</span>
             </p>
           ) : logs.isError ? (
@@ -1086,17 +1086,17 @@ export function OpsConsolePage() {
               {logs.error instanceof Error ? logs.error.message : 'unknown error'}
             </p>
           ) : logLines.length === 0 ? (
-            <p className="px-4 py-10 text-center font-mono text-xs text-muted">
+            <p className="px-4 py-10 text-center font-mono text-xs text-canvas/60">
               — no log lines returned —
             </p>
           ) : (
             <div>
               {logs.data?.truncated && (
-                <p className="border-b border-amber-500/20 bg-amber-950/20 px-4 py-1.5 font-mono text-[11px] text-amber-300">
+                <p className="border-b border-[#FFA946]/30 bg-[rgba(255,169,70,0.15)] px-4 py-1.5 font-mono text-[11px] text-[#FFCF8C]">
                   truncated — showing the most recent 100k characters
                 </p>
               )}
-              <pre className="terminal-scroll log-lines max-h-[480px] overflow-auto px-3 py-3 font-mono text-xs leading-[1.7] text-body">
+              <pre className="terminal-scroll log-lines max-h-[480px] overflow-auto px-3 py-3 font-mono text-xs leading-[1.7] text-canvas/85">
                 {logLines.map((line, i) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: log tail has no stable ids; index is the order
                   <div key={i} className="log-line">
@@ -1104,19 +1104,19 @@ export function OpsConsolePage() {
                   </div>
                 ))}
               </pre>
-              <div className="space-y-2.5 border-t border-hairline/80 p-4">
+              <div className="space-y-2.5 border-t border-white/10 p-5">
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => diagnoseContainer(attached)}
                     disabled={busy === 'diagnose'}
-                    className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-xl bg-lavender px-4 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-lavender-deep active:bg-press-strong disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Stethoscope className="h-4 w-4" aria-hidden />
                     {busy === 'diagnose' ? 'Recording…' : 'Diagnose these logs'}
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed text-muted">
+                <p className="text-[11px] leading-relaxed text-canvas/60">
                   Diagnose records one incident (deduplicated by fingerprint). The
                   diagnosis appears in the panel on the right.
                 </p>
@@ -1173,7 +1173,7 @@ export function OpsConsolePage() {
                     type="button"
                     onClick={() => runInvestigation(madeIncident.id)}
                     disabled={busy === 'investigate' || historyActive}
-                    className="ml-auto flex min-h-[40px] cursor-pointer items-center rounded-lg bg-emerald-400 px-3.5 py-2 text-sm font-semibold text-slate-950 transition-colors duration-200 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="ml-auto flex min-h-[40px] cursor-pointer items-center rounded-xl bg-lavender px-3.5 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-lavender-deep active:bg-press-strong disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {busy === 'investigate'
                       ? 'Starting…'

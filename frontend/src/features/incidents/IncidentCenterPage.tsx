@@ -50,7 +50,7 @@ export function IncidentCenterPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-50">Incident Center</h1>
+        <h1 className="font-display text-[34px] leading-[1.1] font-medium tracking-[-0.02em] text-ink">Incident Center</h1>
         <p className="mt-1 text-sm text-muted">
           Latest {incidents.data?.length ?? 0} incidents. Search and filters apply to the loaded
           collection.
@@ -68,7 +68,7 @@ export function IncidentCenterPage() {
           placeholder="Search title, signature, or project…"
           aria-label="Search incidents"
           data-tour="center-search"
-          className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-hairline bg-panel px-3 py-2 text-sm placeholder:text-muted"
+          className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-hairline bg-panel px-3 py-2 text-sm placeholder:text-muted focus:shadow-[inset_rgba(26,26,26,0.06)_0_2px_10px]"
         />
         <select
           value={filter.source}
@@ -76,7 +76,7 @@ export function IncidentCenterPage() {
           onChange={(e) => set('source', e.target.value as IncidentFilter['source'])}
           aria-label="Filter by source"
           data-tour="center-source"
-          className="min-h-[44px] cursor-pointer rounded-lg border border-hairline bg-panel px-2 py-2 text-sm"
+          className="min-h-[44px] cursor-pointer rounded-xl border border-hairline bg-panel px-3 py-2 text-sm text-ink hover:border-[#C9C9AE]"
         >
           <option value="all">All sources</option>
           <option value="docker">Docker</option>
@@ -88,7 +88,7 @@ export function IncidentCenterPage() {
           onChange={(e) => set('status', e.target.value as IncidentFilter['status'])}
           aria-label="Filter by status"
           data-tour="center-status"
-          className="min-h-[44px] cursor-pointer rounded-lg border border-hairline bg-panel px-2 py-2 text-sm"
+          className="min-h-[44px] cursor-pointer rounded-xl border border-hairline bg-panel px-3 py-2 text-sm text-ink hover:border-[#C9C9AE]"
         >
           <option value="all">All statuses</option>
           <option value="open">Open</option>
@@ -101,7 +101,7 @@ export function IncidentCenterPage() {
           onChange={(e) => set('sort', e.target.value as IncidentSort)}
           aria-label="Sort incidents"
           data-tour="center-sort"
-          className="min-h-[44px] cursor-pointer rounded-lg border border-hairline bg-panel px-2 py-2 text-sm"
+          className="min-h-[44px] cursor-pointer rounded-xl border border-hairline bg-panel px-3 py-2 text-sm text-ink hover:border-[#C9C9AE]"
         >
           {(Object.keys(SORT_LABELS) as IncidentSort[]).map((s) => (
             <option key={s} value={s}>

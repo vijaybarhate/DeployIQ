@@ -31,7 +31,7 @@ export function OverviewPage() {
   return (
     <div className="space-y-5">
       <div data-tour="overview-intro">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
+        <h1 className="font-display text-[34px] leading-[1.1] font-medium tracking-[-0.02em] text-ink">
           Operational overview
         </h1>
         <p className="mt-1 text-sm text-muted">
